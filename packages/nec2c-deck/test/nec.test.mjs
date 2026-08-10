@@ -12,6 +12,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  TL_LENGTH_FROM_GEOMETRY,
   buildDeck,
   feedCurrent,
   parseOutput,
@@ -71,6 +72,19 @@ const GRID = { ntheta: 9, nphi: 7, theta0: 0, phi0: 0, dtheta: 10, dphi: 15 };
 
 const countOccurrences = (haystack, needle) =>
   haystack.split(needle).length - 1;
+
+// buildDeck takes one options object; every test here varies a field or two of
+// the same working deck.
+const deck = (overrides) =>
+  buildDeck({
+    comments: ["t"],
+    wires: WIRES,
+    sources: [],
+    ground: false,
+    freqMhz: 145.9,
+    grid: GRID,
+    ...overrides,
+  });
 
 describe("parseOutput", () => {
   it("reads source impedance and current phase", () => {
@@ -186,55 +200,103 @@ ${SAMPLE_OUTPUT}`;
 
 describe("buildDeck", () => {
   it("emits the expected cards over a ground plane", () => {
-    const sources = [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }];
-    const deck = buildDeck(["test"], WIRES, sources, true, 145.9, GRID);
-    assert.ok(deck.startsWith("CM test"));
-    assert.ok(deck.includes("GN 1"));
+    const text = deck({
+      comments: ["test"],
+      sources: [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }],
+      ground: true,
+    });
+    assert.ok(text.startsWith("CM test"));
+    assert.ok(text.includes("GN 1"));
     // -1: ground present, but no wire connects to it.
-    assert.ok(deck.includes("GE -1"));
-    assert.equal(countOccurrences(deck, "\nGW "), 2);
-    assert.equal(countOccurrences(deck, "\nEX "), 1);
-    assert.ok(deck.trimEnd().endsWith("EN"));
+    assert.ok(text.includes("GE -1"));
+    assert.equal(countOccurrences(text, "\nGW "), 2);
+    assert.equal(countOccurrences(text, "\nEX "), 1);
+    assert.ok(text.trimEnd().endsWith("EN"));
   });
 
   it("emits a Sommerfeld GN card for real ground constants", () => {
-    const deck = buildDeck(
-      ["t"],
-      WIRES,
-      [],
-      { epsR: 13, sigmaSm: 0.005 },
-      145.9,
-      GRID,
-    );
+    const text = deck({ ground: { epsR: 13, sigmaSm: 0.005 } });
     // Type 2 is Sommerfeld/Norton; the 0 after it is the radial-wire count,
     // which nec2c requires to be zero for this ground type.
-    assert.ok(deck.includes("GN 2 0 0 0 13.000000 0.005000"));
-    assert.ok(deck.includes("GE -1"));
+    assert.ok(text.includes("GN 2 0 0 0 13.000000 0.005000"));
+    assert.ok(text.includes("GE -1"));
+  });
+
+  it("emits a reflection-coefficient GN card when asked", () => {
+    const text = deck({
+      ground: { epsR: 13, sigmaSm: 0.005, method: "reflection" },
+    });
+    assert.ok(text.includes("GN 0 0 0 0 13.000000 0.005000"));
+  });
+
+  it("emits a radial ground screen", () => {
+    const text = deck({
+      ground: {
+        epsR: 13,
+        sigmaSm: 0.005,
+        radials: { count: 32, screenRadiusM: 10, wireRadiusM: 0.0008 },
+      },
+    });
+    // A screen forces the reflection-coefficient ground; the trailing floats
+    // are the screen radius and the radial wire radius.
+    assert.ok(
+      text.includes("GN 0 32 0 0 13.000000 0.005000 10.000000 0.000800"),
+    );
+  });
+
+  it("refuses a radial screen over Sommerfeld ground", () => {
+    // nec2c stops with "RADIAL WIRE G.S. APPROXIMATION MAY NOT BE USED WITH
+    // SOMMERFELD GROUND OPTION"; say so before writing the card.
+    assert.throws(
+      () =>
+        deck({
+          ground: {
+            epsR: 13,
+            sigmaSm: 0.005,
+            method: "sommerfeld",
+            radials: { count: 32, screenRadiusM: 10, wireRadiusM: 0.0008 },
+          },
+        }),
+      /cannot be combined with the Sommerfeld ground/,
+    );
+  });
+
+  it("bonds wires to ground with GE 1 when asked", () => {
+    // A ground-mounted vertical fed against earth needs the connection; NEC
+    // extends the current basis onto the image only for GE 1.
+    const text = deck({ ground: true, groundConnected: true });
+    assert.ok(text.includes("GE 1"));
+  });
+
+  it("refuses a ground connection in free space", () => {
+    assert.throws(
+      () => deck({ ground: false, groundConnected: true }),
+      /but ground is false/,
+    );
   });
 
   it("refuses ground constants that are not physical", () => {
     assert.throws(
-      () =>
-        buildDeck(["t"], WIRES, [], { epsR: 0.5, sigmaSm: 0.005 }, 145.9, GRID),
+      () => deck({ ground: { epsR: 0.5, sigmaSm: 0.005 } }),
       /cannot be below 1/,
     );
     assert.throws(
-      () => buildDeck(["t"], WIRES, [], { epsR: 13, sigmaSm: -1 }, 145.9, GRID),
+      () => deck({ ground: { epsR: 13, sigmaSm: -1 } }),
       /cannot be negative/,
     );
   });
 
   it("omits ground cards in free space", () => {
-    const sources = [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }];
-    const deck = buildDeck(["t"], WIRES, sources, false, 145.9, GRID);
-    assert.ok(deck.includes("GE 0"));
-    assert.ok(!deck.includes("GN"));
+    const text = deck({
+      sources: [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }],
+    });
+    assert.ok(text.includes("GE 0"));
+    assert.ok(!text.includes("GN"));
   });
 
   it("formats geometry to six decimals", () => {
-    const deck = buildDeck(["t"], WIRES, [], false, 145.9, GRID);
     assert.ok(
-      deck.includes(
+      deck({}).includes(
         "GW 1 9 0.000000 0.000000 0.000000 0.000000 0.000000 1.000000 0.001000",
       ),
       "GW card must use fixed 6-decimal formatting",
@@ -245,9 +307,8 @@ describe("buildDeck", () => {
     // A GW radius of 0 means a tapered wire expecting a GC card, so rounding
     // one away changes what the card means. nec2c would only say
     // "GEOMETRY DATA CARD ERROR".
-    const tiny = [{ ...WIRES[0], radiusM: 5e-7 }];
     assert.throws(
-      () => buildDeck(["t"], tiny, [], false, 145.9, GRID),
+      () => deck({ wires: [{ ...WIRES[0], radiusM: 5e-7 }] }),
       /would be written as zero/,
     );
   });
@@ -255,38 +316,29 @@ describe("buildDeck", () => {
   it("allows a coordinate that rounds to zero", () => {
     // A radial rotated to 90 degrees lands on 3.4e-17, which is zero in every
     // sense that matters. Only a zero radius changes what the card means.
-    const rotated = [{ ...WIRES[0], x2: 3.3971132970020115e-17 }];
-    const deck = buildDeck(["t"], rotated, [], false, 145.9, GRID);
-    assert.ok(deck.includes("GW 1 9 0.000000 0.000000 0.000000 0.000000"));
+    const text = deck({
+      wires: [{ ...WIRES[0], x2: 3.3971132970020115e-17 }],
+    });
+    assert.ok(text.includes("GW 1 9 0.000000 0.000000 0.000000 0.000000"));
   });
 
   it("refuses non-finite and out-of-range values", () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(
-        () =>
-          buildDeck(["t"], [{ ...WIRES[0], z2: bad }], [], false, 145.9, GRID),
+        () => deck({ wires: [{ ...WIRES[0], z2: bad }] }),
         /must be a finite number/,
       );
     }
     // toFixed switches to exponential at 1e21, which no card reader accepts.
     assert.throws(
-      () =>
-        buildDeck(["t"], [{ ...WIRES[0], z2: 1e21 }], [], false, 145.9, GRID),
+      () => deck({ wires: [{ ...WIRES[0], z2: 1e21 }] }),
       /too large/,
     );
   });
 
   it("refuses a fractional tag or segment count", () => {
     assert.throws(
-      () =>
-        buildDeck(
-          ["t"],
-          [{ ...WIRES[0], segments: 9.5 }],
-          [],
-          false,
-          145.9,
-          GRID,
-        ),
+      () => deck({ wires: [{ ...WIRES[0], segments: 9.5 }] }),
       /non-negative integer/,
     );
   });
@@ -294,31 +346,159 @@ describe("buildDeck", () => {
   it("refuses a comment carrying a newline", () => {
     // Otherwise the text after the newline is read as a card of its own.
     assert.throws(
-      () => buildDeck(["line1\nEN\nCM evil"], WIRES, [], false, 145.9, GRID),
+      () => deck({ comments: ["line1\nEN\nCM evil"] }),
       /cannot contain newlines/,
     );
   });
 
   it("allows zero where zero is a normal value", () => {
     // A purely real drive, and a single azimuth cut with no phi step.
-    const deck = buildDeck(
-      ["t"],
-      WIRES,
-      [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }],
-      false,
-      145.9,
-      { ntheta: 3, nphi: 1, theta0: 0, phi0: 0, dtheta: 30, dphi: 0 },
-    );
-    assert.ok(deck.includes("EX 0 1 5 0 1.000000 0.000000"));
-    assert.ok(deck.includes("RP 0 3 1 1000 0.000 0.000 30.000 0.000"));
+    const text = deck({
+      sources: [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }],
+      grid: { ntheta: 3, nphi: 1, theta0: 0, phi0: 0, dtheta: 30, dphi: 0 },
+    });
+    assert.ok(text.includes("EX 0 1 5 0 1.000000 0.000000"));
+    assert.ok(text.includes("RP 0 3 1 1000 0.000 0.000 30.000 0.000"));
+  });
+
+  it("honours an RP option code", () => {
+    // 1002 keeps the default axes but asks for directive rather than power
+    // gain; parseOutput reads the same columns either way.
+    const text = deck({ grid: { ...GRID, optionCode: 1002 } });
+    assert.ok(text.includes("RP 0 9 7 1002 "));
   });
 
   it("emits transmission lines when given them", () => {
-    const lines = [
-      { tag1: 1, segment1: 5, tag2: 2, segment2: 5, z0Ohm: -93, lengthM: 0.5 },
-    ];
-    const deck = buildDeck(["t"], WIRES, [], false, 145.9, GRID, lines);
+    const text = deck({
+      transmissionLines: [
+        {
+          tag1: 1,
+          segment1: 5,
+          tag2: 2,
+          segment2: 5,
+          z0Ohm: -93,
+          lengthM: 0.5,
+        },
+      ],
+    });
     // A negative Z0 models a crossed connection and must survive formatting.
-    assert.ok(deck.includes("TL 1 5 2 5 -93.000000 0.500000"));
+    assert.ok(text.includes("TL 1 5 2 5 -93.000000 0.500000"));
+  });
+
+  it("writes a zero TL length only for the explicit sentinel", () => {
+    // Zero is the card's own "measure it from the geometry". A computed length
+    // that rounds away must not turn into that silently.
+    const line = { tag1: 1, segment1: 5, tag2: 2, segment2: 5, z0Ohm: 50 };
+    const text = deck({
+      transmissionLines: [{ ...line, lengthM: TL_LENGTH_FROM_GEOMETRY }],
+    });
+    assert.ok(text.includes("TL 1 5 2 5 50.000000 0.000000"));
+    assert.throws(
+      () => deck({ transmissionLines: [{ ...line, lengthM: 5e-7 }] }),
+      /would be written as zero/,
+    );
+  });
+
+  it("emits loads in exponential notation", () => {
+    // 5 pF is 5e-12 farads. Fixed six-decimal notation would write it as zero,
+    // and NEC reads a zero C as "no capacitor in this network" -- a load that
+    // silently vanishes.
+    const text = deck({
+      loads: [
+        {
+          kind: "series",
+          tag: 1,
+          fromSegment: 3,
+          resistanceOhm: 10,
+          inductanceH: 0,
+          capacitanceF: 5e-12,
+        },
+      ],
+    });
+    assert.ok(
+      text.includes("LD 0 1 3 3 1.000000e+1 0.000000e+0 5.000000e-12"),
+      `capacitance must keep its magnitude, got: ${text}`,
+    );
+  });
+
+  it("emits each load kind with its own type code", () => {
+    const kinds = {
+      series: 0,
+      parallel: 1,
+      seriesPerMeter: 2,
+      parallelPerMeter: 3,
+    };
+    for (const [kind, code] of Object.entries(kinds)) {
+      const text = deck({
+        loads: [
+          {
+            kind,
+            tag: 1,
+            resistanceOhm: 1,
+            inductanceH: 1e-6,
+            capacitanceF: 1e-12,
+          },
+        ],
+      });
+      assert.ok(
+        text.includes(`LD ${code} 1 0 0 `),
+        `${kind} should be ${code}`,
+      );
+    }
+    const impedance = deck({
+      loads: [
+        { kind: "impedance", tag: 1, resistanceOhm: 50, reactanceOhm: -20 },
+      ],
+    });
+    assert.ok(impedance.includes("LD 4 1 0 0 5.000000e+1 -2.000000e+1 0"));
+    // Copper. This is the card that turns a lossless model into a real one.
+    const wire = deck({
+      loads: [{ kind: "conductivity", tag: 0, sigmaSm: 5.8e7 }],
+    });
+    assert.ok(wire.includes("LD 5 0 0 0 5.800000e+7 0 0"));
+  });
+
+  it("refuses a backwards or non-physical load", () => {
+    assert.throws(
+      () =>
+        deck({
+          loads: [
+            {
+              kind: "series",
+              tag: 1,
+              fromSegment: 5,
+              toSegment: 2,
+              resistanceOhm: 1,
+              inductanceH: 0,
+              capacitanceF: 0,
+            },
+          ],
+        }),
+      /is before fromSegment/,
+    );
+    assert.throws(
+      () => deck({ loads: [{ kind: "conductivity", tag: 1, sigmaSm: 0 }] }),
+      /must be positive/,
+    );
+  });
+
+  it("emits GM transforms after the wires and before GE", () => {
+    const text = deck({
+      transforms: [{ rotZDeg: 45, copies: 7, tagIncrement: 10 }],
+    });
+    assert.ok(
+      text.includes("GM 10 7 0.000 0.000 45.000 0.000000 0.000000 0.000000 0"),
+    );
+    // GM acts on the structure built so far, so it has to follow every GW and
+    // precede the card that ends the geometry.
+    assert.ok(text.indexOf("\nGM ") > text.lastIndexOf("\nGW "));
+    assert.ok(text.indexOf("\nGM ") < text.indexOf("\nGE "));
+  });
+
+  it("defaults every GM field to a no-op", () => {
+    const text = deck({ transforms: [{ moveZM: 2 }] });
+    assert.ok(
+      text.includes("GM 0 0 0.000 0.000 0.000 0.000000 0.000000 2.000000 0"),
+    );
   });
 });

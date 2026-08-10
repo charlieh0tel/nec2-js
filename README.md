@@ -16,7 +16,14 @@ use the WebAssembly build without the deck helpers.
 import { buildDeck, parseOutput } from "nec2c-deck";
 import { runNec } from "nec2c-wasm";
 
-const deck = buildDeck(["dipole"], wires, sources, false, 145.9, grid);
+const deck = buildDeck({
+  comments: ["dipole"],
+  wires,
+  sources,
+  ground: false,
+  freqMhz: 145.9,
+  grid,
+});
 const result = parseOutput(await runNec(deck));
 console.log(result.sources[0].zReal); // 75.25
 ```
