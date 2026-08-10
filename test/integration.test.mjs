@@ -146,6 +146,36 @@ describe("nec2c-deck + nec2c-wasm", () => {
     );
   });
 
+  it("reports the efficiency a conductivity load costs", async () => {
+    // The pairing that makes both cards worth having: LD makes the model
+    // lossy, and the power budget is where that loss becomes a number.
+    const lossless = await solve({});
+    assert.ok(lossless.power, "expected a power budget");
+    assert.ok(
+      lossless.power.efficiencyPercent > 99.9,
+      `a lossless model should be ~100% efficient, got ${lossless.power.efficiencyPercent}`,
+    );
+    assert.equal(lossless.power.structureLossW, 0);
+
+    const steel = await solve({
+      loads: [{ kind: "conductivity", tag: 1, sigmaSm: 1.0e6 }],
+    });
+    assert.ok(steel.power.efficiencyPercent < 99.9, "steel should cost gain");
+    assert.ok(steel.power.structureLossW > 0, "steel should burn power");
+    // The budget has to add up: input = radiated + structure + network loss.
+    // nec2c prints each term with %11.4E, five significant digits, so three
+    // summed terms can miss the input by a few parts per million of it. The
+    // tolerance is that printing precision, not physics.
+    const { inputW, radiatedW, structureLossW, networkLossW } = steel.power;
+    const residualW = Math.abs(
+      inputW - (radiatedW + structureLossW + networkLossW),
+    );
+    assert.ok(
+      residualW < inputW * 1e-3,
+      `power budget does not balance: ${residualW} W adrift of ${inputW} W`,
+    );
+  });
+
   it("replicates a wire with a GM transform", async () => {
     // One GW plus a GM asking for three more copies is a four-wire structure,
     // so nec2c should report four wires' worth of segments.
