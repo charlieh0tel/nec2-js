@@ -42,9 +42,25 @@ function parseInputParams(out) {
   const lines = out.split("\n");
   const idx = lines.findIndex((l) => l.includes("ANTENNA INPUT PARAMETERS"));
   if (idx < 0) throw new Error("no ANTENNA INPUT PARAMETERS section");
-  // header, then two column-label lines, then the data row.
-  const row = lines[idx + 3].trim().split(/\s+/).map(Number);
-  return row;
+  // Scan for the data row rather than trusting a fixed header length: the
+  // header differs between sections and grows lines in some RP modes, and a
+  // hardcoded offset that lands on a header line would parse to all-NaN.
+  for (let i = idx + 1; i < lines.length; i++) {
+    const row = lines[i].trim().split(/\s+/).map(Number);
+    if (row.length >= 11 && !row.some(Number.isNaN)) return row;
+  }
+  throw new Error("no ANTENNA INPUT PARAMETERS data row parsed");
+}
+
+// A comparison is only meaningful if there are numbers on both sides. NaN
+// fails every > test, so an all-NaN parse would otherwise report a worst
+// relative difference of zero and pass.
+function requireFinite(values, label) {
+  if (!values.length) throw new Error(`${label}: no values parsed`);
+  const bad = values.findIndex((v) => !Number.isFinite(v));
+  if (bad >= 0) {
+    throw new Error(`${label}: value ${bad} is not finite (${values[bad]})`);
+  }
 }
 
 // Pull the RADIATION PATTERNS numeric rows as arrays of floats. The section
@@ -95,6 +111,24 @@ const wasmOut = await runNec(deck);
 
 const niParams = parseInputParams(nativeOut);
 const wiParams = parseInputParams(wasmOut);
+requireFinite(niParams, "native input-params");
+requireFinite(wiParams, "wasm input-params");
+// Confirm this is the row the deck's EX card asked for, so that parsing some
+// other numeric table cannot masquerade as agreement.
+const excitation = deck
+  .split("\n")
+  .find((l) => l.startsWith("EX "))
+  ?.trim()
+  .split(/\s+/);
+if (excitation) {
+  const [wantTag, wantSeg] = [Number(excitation[2]), Number(excitation[3])];
+  if (niParams[0] !== wantTag || niParams[1] !== wantSeg) {
+    throw new Error(
+      `parsed input-params row is tag ${niParams[0]} seg ${niParams[1]}, ` +
+        `deck excites tag ${wantTag} seg ${wantSeg}`,
+    );
+  }
+}
 const ipDiff = maxRelDiff(niParams, wiParams, "input-params");
 // Row columns: tag seg Vre Vim Ire Iim Zre Zim Yre Yim P; impedance is 6,7.
 console.log(
@@ -105,8 +139,11 @@ console.log(
 const nRad = parseRadiation(nativeOut);
 const wRad = parseRadiation(wasmOut);
 const sample = [0, 3, 6, 9, 12].filter((i) => i < nRad.length);
+if (!sample.length) throw new Error("no radiation rows to compare");
 let radWorst = 0;
 for (const i of sample) {
+  requireFinite(nRad[i], `native rad row ${i}`);
+  requireFinite(wRad[i], `wasm rad row ${i}`);
   const d = maxRelDiff(nRad[i], wRad[i], `rad row ${i}`);
   radWorst = Math.max(radWorst, d);
   console.log(
