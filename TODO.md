@@ -112,21 +112,30 @@ becomes a perfect conductor, so `GN 2` must converge to the `GN 1` answer for
 the same geometry. Run it with no arguments for the bundled wasm nec2c, or pass
 a solver command to compare another implementation.
 
-nec2c converges exactly at and above 0.05 wavelengths of height, and fails
-below it -- +91.9% at 0.02wl, and worse further down. Independently, a
-ground-mounted vertical over soil disagreed with nec2++ by 29.6% where the two
-agreed to 0.01% over perfect ground, which puts the fault in the Sommerfeld
-evaluation rather than in geometry or segmentation.
+Every implementation converges exactly at and above 0.05 wavelengths of height.
+Below that, all four fail, but not alike. Worst error in the feedpoint
+resistance, and the value at 0.02wl:
 
-- [ ] Settle whether this is nec2c's bug or NEC-2's limit. The divergence sets
-      in where the height approaches the segment length, a regime NEC-2 itself
-      warns about, so the sweep against nec2c alone cannot tell the two apart.
-      Running the same sweep through nec2++ can: if it converges where nec2c
-      does not, the method is sound and the implementation is not. That is the
-      evidence the packaging question below turns on.
-- [ ] Until then, say so in `nec2c-wasm`'s README. Someone modelling a
-      ground-mounted vertical -- the obvious use for finite ground -- lands
-      exactly in the broken regime and gets a plausible wrong number.
+| solver | what it is | worst | at 0.02wl |
+|---|---|---|---|
+| nec2c 1.3.1 | C translation, `somnec.c` | +46594% | +91.90% |
+| aegnec2 0.9.0 | C, with the original `somnec.f` linked in | +46597% | +91.92% |
+| nec2++ 2.3.4 | C++ rewrite | +126% | +0.77% |
+| nec2dxs | the original Fortran NEC-2D | segfault | segfault |
+
+- [x] Settled: this is NEC-2's behaviour, not a defect nec2c introduced.
+      aegnec2 calls the *original Fortran* SOMNEC and reproduces nec2c's
+      numbers to three digits, so nec2c's C translation is faithful. The
+      original Fortran NEC-2D segfaults in the same regime rather than
+      disagreeing, which is its own kind of confirmation that the regime is
+      where the method comes apart. An earlier note here read this as a bug in
+      nec2c; that was wrong, and only running the other three showed it.
+- [ ] nec2++ is the outlier, and in the useful direction: two orders of
+      magnitude closer to the limit at 0.02wl. Worth finding what it does
+      differently before assuming it is simply better -- it may have changed
+      the interpolation grid, or it may be trading this against something else.
+- [x] `nec2c-wasm`'s README carries the caveat, since a ground-mounted
+      vertical -- the obvious use for finite ground -- sits in that regime.
 
 ### nec2++
 
