@@ -195,14 +195,29 @@ function tokenize(line: string): string[] {
 // (including inf/nan and scientific notation, but not hex or empty strings).
 function isFloat(token: string): boolean {
   const trimmed = token.trim();
-  if (trimmed === "") {
+  // Hex is excluded deliberately: Number("0x64") is 100, but the tag and
+  // segment fields go through parseInt(_, 10), which reads it as 0. Accepting
+  // a token one way and reading it another is how a tag silently changes.
+  if (trimmed === "" || /^[+-]?0[xXbBoO]/.test(trimmed)) {
     return false;
   }
   if (/^[+-]?(inf|infinity|nan)$/i.test(trimmed)) {
     return true;
   }
-  const value = Number(trimmed);
-  return !Number.isNaN(value) && trimmed !== "";
+  return !Number.isNaN(Number(trimmed));
+}
+
+// Read a numeric field, refusing the non-finite values nec2c prints when a
+// solve diverges. Returning NaN would propagate silently through hypot and
+// atan2 and surface much later as an unexplained result.
+function finite(token: string | undefined, field: string): number {
+  const value = Number(token);
+  if (!Number.isFinite(value)) {
+    throw new Error(
+      `nec2c reported a non-finite ${field}: ${JSON.stringify(token)}`,
+    );
+  }
+  return value;
 }
 
 // Parse the ANTENNA INPUT PARAMETERS data rows.
@@ -237,10 +252,10 @@ function parseSources(lines: string[], start: number): SourceResult[] {
     results.push({
       tag: Number.parseInt(t0, 10),
       segment: Number.parseInt(tokens[1] ?? "", 10),
-      iReal: Number(tokens[4]),
-      iImag: Number(tokens[5]),
-      zReal: Number(tokens[6]),
-      zImag: Number(tokens[7]),
+      iReal: finite(tokens[4], "source current (real)"),
+      iImag: finite(tokens[5], "source current (imaginary)"),
+      zReal: finite(tokens[6], "source impedance (real)"),
+      zImag: finite(tokens[7], "source impedance (imaginary)"),
     });
   }
   return results;
@@ -271,10 +286,10 @@ function parsePattern(lines: string[], start: number): PatternPoint[] {
     ) {
       const sense = t7 !== undefined && isFloat(t7) ? "LINEAR" : (t7 ?? "LINEAR");
       points.push({
-        thetaDeg: Number(t0),
-        phiDeg: Number(t1),
-        totalGainDb: Number(tokens[4]),
-        axialRatio: Number(tokens[5]),
+        thetaDeg: finite(t0, "pattern theta"),
+        phiDeg: finite(t1, "pattern phi"),
+        totalGainDb: finite(tokens[4], "pattern total gain"),
+        axialRatio: finite(tokens[5], "pattern axial ratio"),
         sense,
       });
       seenData = true;
@@ -311,8 +326,8 @@ function parseCurrents(lines: string[], start: number): SegmentCurrent[] {
       results.push({
         tag: Number.parseInt(tokens[1] ?? "", 10),
         segment: Number.parseInt(t0, 10),
-        iReal: Number(t6),
-        iImag: Number(t7),
+        iReal: finite(t6, "segment current (real)"),
+        iImag: finite(t7, "segment current (imaginary)"),
       });
       seenData = true;
     } else if (seenData) {

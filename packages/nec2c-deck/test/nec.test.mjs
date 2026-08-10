@@ -120,6 +120,16 @@ ${SAMPLE_OUTPUT}`;
     assert.equal(result.sources.length, 2);
   });
 
+  it("rejects non-finite numbers from a diverged solve", () => {
+    // %E prints NAN/INF when a solve diverges. Passing those through would
+    // propagate silently through hypot and atan2.
+    const diverged = SAMPLE_OUTPUT.replace(
+      "1.0000E+02  -1.0000E+02",
+      "NAN         NAN       ",
+    );
+    assert.throws(() => parseOutput(diverged), /non-finite source impedance/);
+  });
+
   it("returns empty sections for text with no results", () => {
     const result = parseOutput("nothing to see here\n");
     assert.deepEqual(result.sources, []);
