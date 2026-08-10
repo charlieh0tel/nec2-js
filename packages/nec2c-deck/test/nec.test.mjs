@@ -64,13 +64,26 @@ describe("parseOutput", () => {
     assert.ok(Math.abs(sourceCurrentPhaseDeg(b) + 45) < 1e-9);
   });
 
-  it("treats a missing polarization sense as LINEAR", () => {
+  it("reports a blank polarization sense as undefined", () => {
     const result = parseOutput(SAMPLE_OUTPUT);
     assert.equal(result.pattern.length, 3);
-    // Exact zenith: polarization is undefined, so nec2c omits the column.
-    assert.equal(result.pattern[0].sense, "LINEAR");
-    assert.ok(Math.abs(result.pattern[0].axialRatio - 0.98) < 1e-9);
+    // nec2c blanks the column at a pattern null, where there is no
+    // polarization to report -- not a linear-polarization measurement.
+    assert.equal(result.pattern[0].sense, "UNDEFINED");
     assert.equal(result.pattern[1].sense, "RIGHT");
+    // A row nec2c did label LINEAR keeps that label.
+    assert.equal(result.pattern[2].sense, "LINEAR");
+  });
+
+  it("does not blank the sense at zenith when the field is nonzero", () => {
+    // The comment this replaces claimed the column is dropped at zenith. The
+    // real fixture disproves it: theta=0 phi=0 reads RIGHT.
+    const result = parseOutput(fixture("loop.out.txt"));
+    const zenith = result.pattern.find(
+      (p) => p.thetaDeg === 0 && p.phiDeg === 0,
+    );
+    assert.ok(zenith, "fixture should contain a zenith row");
+    assert.notEqual(zenith.sense, "UNDEFINED");
   });
 
   it("reads all three sections of a real nec2c run", () => {

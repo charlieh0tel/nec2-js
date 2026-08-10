@@ -40,6 +40,19 @@ of it; there is no `LD`, `GM`, `GS`, or `NT`.
 `parseOutput` reads the `ANTENNA INPUT PARAMETERS`, `CURRENTS AND LOCATION`,
 and `RADIATION PATTERNS` sections into `sources`, `currents`, and `pattern`.
 
+It parses **one set of results per call**. nec2c emits a full set of sections
+per frequency step and per `RP` card, and `NecResult` has nowhere to record
+which frequency a row belongs to, so output holding more than one set is
+rejected rather than silently reduced to one. Sweep by running one frequency
+per deck.
+
+It also throws rather than guessing: a malformed row inside a section, or a
+non-finite number from a diverged solve, is an error, not a `NaN` field.
+
+At a pattern null nec2c prints no polarization sense, and `sense` is
+`"UNDEFINED"` there -- the axial ratio on such a row is not a measurement of
+anything.
+
 **Portability caveat.** The deck writer emits standard NEC-2 cards, but the
 parsers are keyed to nec2c's exact column layout and will not read output from
 other NEC implementations. Hence the package name.

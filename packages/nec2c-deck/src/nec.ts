@@ -261,10 +261,15 @@ function parseSources(lines: string[], start: number): SourceResult[] {
   return results;
 }
 
+// Reported for a direction where nec2c printed no polarization sense: the
+// field is too small to have one (a pattern null), so neither the sense nor
+// the axial ratio on that row is a measurement of anything.
+export const SENSE_UNDEFINED = "UNDEFINED";
+
 // Parse RADIATION PATTERNS data rows.
 // Layout: theta phi vert horiz total axial tilt [sense] e_theta_mag
-// e_theta_phase e_phi_mag e_phi_phase. The textual sense column is absent at
-// directions where polarization is undefined (e.g. exact zenith).
+// e_theta_phase e_phi_mag e_phi_phase. The textual sense column is blank at
+// pattern nulls; see SENSE_UNDEFINED.
 function parsePattern(lines: string[], start: number): PatternPoint[] {
   const points: PatternPoint[] = [];
   let seenData = false;
@@ -284,7 +289,12 @@ function parsePattern(lines: string[], start: number): PatternPoint[] {
       isFloat(t0) &&
       isFloat(t1)
     ) {
-      const sense = t7 !== undefined && isFloat(t7) ? "LINEAR" : (t7 ?? "LINEAR");
+      // nec2c blanks the sense column when both field components are ~0
+      // (radiation.c: ethm2 <= 1e-20 && ephm2 <= 1e-20) -- a pattern null,
+      // which can occur at any angle. There is no polarization to report
+      // there, so say so rather than claiming a linear measurement.
+      const sense =
+        t7 !== undefined && isFloat(t7) ? SENSE_UNDEFINED : (t7 ?? SENSE_UNDEFINED);
       points.push({
         thetaDeg: finite(t0, "pattern theta"),
         phiDeg: finite(t1, "pattern phi"),
