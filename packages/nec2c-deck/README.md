@@ -59,12 +59,14 @@ other NEC implementations. Hence the package name.
 
 ## Formats
 
-Both compiled JavaScript and TypeScript source ship:
+`import "nec2c-deck"` gives you `dist/` -- compiled ES2022 with `.d.ts` and
+source maps.
 
-| import | what you get |
-|---|---|
-| `nec2c-deck` | `dist/` -- compiled ES2022 with `.d.ts` and source maps |
-| `nec2c-deck/source` | `src/index.ts` -- raw TypeScript, for bundlers that prefer it |
+The TypeScript sources ship in the package too, under `src/`, and the manifest
+points at them through the conventional `source` field for bundlers that
+compile dependencies themselves. There is deliberately no `nec2c-deck/source`
+entry point: Node refuses to strip types under `node_modules`, so importing raw
+`.ts` from an installed package fails outright.
 
 ## License
 

@@ -13,8 +13,11 @@
     "./inline": {
       "types": "./src/runner.d.ts",
       "default": "./src/runner-inline.mjs"
-    }
+    },
+    "./package.json": "./package.json"
   },
+  "main": "./src/runner.mjs",
+  "types": "./src/runner.d.ts",
   "files": [
     "src",
     "prebuilts",
