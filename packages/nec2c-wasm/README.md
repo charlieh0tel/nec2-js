@@ -20,8 +20,16 @@ const output = await runNec(deckText); // full text of nec2c's output file
 ```
 
 `runNec(deckText, options?)` writes the deck to an in-memory filesystem, runs
-nec2c against it, and resolves to the output file's text. Parsing that text is
-[`nec2c-deck`](../nec2c-deck)'s job.
+nec2c against it, and resolves to the output file's text. Building that text
+and parsing it back is [`nec2c-deck`](../nec2c-deck)'s job.
+
+The deck is passed through verbatim, so this package supports every card nec2c
+reads -- all 34 of them, geometry (`GW`, `GC`, `GX`, `GR`, `GS`, `GE`, `GM`,
+`SP`, `SM`, `GA`, `SC`, `GH`, `GF`) and control (`FR`, `LD`, `GN`, `EX`, `NT`,
+`TL`, `XQ`, `GD`, `RP`, `NX`, `PT`, `KH`, `NE`, `NH`, `PQ`, `EK`, `CP`, `PL`,
+`EN`, `WG`). `nec2c-deck`'s `buildDeck` writes a subset of those, so a model
+needing a card it does not emit can still be run here by writing the deck text
+yourself. `TODO.md` at the repo root tracks which cards those are.
 
 ### Entry points
 
