@@ -181,6 +181,60 @@ describe("buildDeck", () => {
     );
   });
 
+  it("refuses a dimension that would be written as zero", () => {
+    // A GW radius of 0 means a tapered wire expecting a GC card, so rounding
+    // one away changes what the card means. nec2c would only say
+    // "GEOMETRY DATA CARD ERROR".
+    const tiny = [{ ...WIRES[0], radiusM: 5e-7 }];
+    assert.throws(
+      () => buildDeck(["t"], tiny, [], false, 145.9, GRID),
+      /would be written as zero/,
+    );
+  });
+
+  it("refuses non-finite and out-of-range values", () => {
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.throws(
+        () => buildDeck(["t"], [{ ...WIRES[0], z2: bad }], [], false, 145.9, GRID),
+        /must be a finite number/,
+      );
+    }
+    // toFixed switches to exponential at 1e21, which no card reader accepts.
+    assert.throws(
+      () => buildDeck(["t"], [{ ...WIRES[0], z2: 1e21 }], [], false, 145.9, GRID),
+      /too large/,
+    );
+  });
+
+  it("refuses a fractional tag or segment count", () => {
+    assert.throws(
+      () => buildDeck(["t"], [{ ...WIRES[0], segments: 9.5 }], [], false, 145.9, GRID),
+      /non-negative integer/,
+    );
+  });
+
+  it("refuses a comment carrying a newline", () => {
+    // Otherwise the text after the newline is read as a card of its own.
+    assert.throws(
+      () => buildDeck(["line1\nEN\nCM evil"], WIRES, [], false, 145.9, GRID),
+      /cannot contain newlines/,
+    );
+  });
+
+  it("allows zero where zero is a normal value", () => {
+    // A purely real drive, and a single azimuth cut with no phi step.
+    const deck = buildDeck(
+      ["t"],
+      WIRES,
+      [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }],
+      false,
+      145.9,
+      { ntheta: 3, nphi: 1, theta0: 0, phi0: 0, dtheta: 30, dphi: 0 },
+    );
+    assert.ok(deck.includes("EX 0 1 5 0 1.000000 0.000000"));
+    assert.ok(deck.includes("RP 0 3 1 1000 0.000 0.000 30.000 0.000"));
+  });
+
   it("emits transmission lines when given them", () => {
     const lines = [
       { tag1: 1, segment1: 5, tag2: 2, segment2: 5, z0Ohm: -93, lengthM: 0.5 },

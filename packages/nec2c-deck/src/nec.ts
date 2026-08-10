@@ -132,12 +132,77 @@ export function feedCurrent(result: NecResult, tag: number): Complex {
   return { re: 0, im: 0 };
 }
 
-function f6(x: number): string {
+// NEC card fields are fixed-point text, so a value has to survive being
+// written with a fixed number of decimals. Six decimals in metres is 1 um: a
+// smaller dimension would be written as 0.000000, and a zero GW radius means
+// something else entirely to NEC (a tapered wire expecting a GC card), so
+// nec2c would reject the deck with an error naming neither the wire nor the
+// field. toFixed also switches to exponential notation at 1e21, which no NEC
+// card reader accepts.
+const F6_SMALLEST = 1e-6;
+const FIXED_NOTATION_LIMIT = 1e21;
+
+function checkFixed(x: number, field: string, smallest: number): void {
+  if (!Number.isFinite(x)) {
+    throw new Error(`${field} must be a finite number, got ${x}`);
+  }
+  if (Math.abs(x) >= FIXED_NOTATION_LIMIT) {
+    throw new Error(`${field} is too large to write as a NEC card field: ${x}`);
+  }
+  if (x !== 0 && Math.abs(x) < smallest) {
+    throw new Error(
+      `${field} would be written as zero (${x}); NEC card fields carry ` +
+        `${smallest} resolution, and a zero radius or coordinate changes the ` +
+        "meaning of the card",
+    );
+  }
+}
+
+function f6(x: number, field: string): string {
+  checkFixed(x, field, F6_SMALLEST);
   return x.toFixed(6);
 }
 
-function f3(x: number): string {
+function f3any(x: number, field: string): string {
+  checkFixed(x, field, 0);
   return x.toFixed(3);
+}
+
+// For fields where rounding to zero is harmless because zero is a normal
+// value, not a change of meaning.
+function f6any(x: number, field: string): string {
+  checkFixed(x, field, 0);
+  return x.toFixed(6);
+}
+
+// A comment card is one line. A newline in the text would end the card and let
+// whatever followed be read as a card of its own, so text that cannot be
+// carried faithfully is rejected rather than quietly reshaped. NEC reads 80
+// columns; "CM " takes three.
+const COMMENT_COLUMNS = 77;
+
+function comment(text: string): string {
+  if (/[\r\n]/.test(text)) {
+    throw new Error(
+      `comment lines cannot contain newlines: ${JSON.stringify(text)}`,
+    );
+  }
+  if (text.length > COMMENT_COLUMNS) {
+    throw new Error(
+      `comment is ${text.length} characters; NEC reads ${COMMENT_COLUMNS}: ` +
+        JSON.stringify(text),
+    );
+  }
+  return text;
+}
+
+// Tags and segment counts index NEC's own tables; a fractional or negative one
+// silently becomes a different card.
+function checkIndex(x: number, field: string): number {
+  if (!Number.isInteger(x) || x < 0) {
+    throw new Error(`${field} must be a non-negative integer, got ${x}`);
+  }
+  return x;
 }
 
 // Render a complete NEC-2 deck as text.
@@ -150,13 +215,16 @@ export function buildDeck(
   grid: RadiationGrid,
   transmissionLines: TransmissionLine[] = [],
 ): string {
-  const lines: string[] = commentLines.map((c) => `CM ${c}`);
+  const lines: string[] = commentLines.map((c) => `CM ${comment(c)}`);
   lines.push("CE");
   for (const w of wires) {
+    const at = (field: string) => `wire ${w.tag} ${field}`;
     lines.push(
-      `GW ${w.tag} ${w.segments} ` +
-        `${f6(w.x1)} ${f6(w.y1)} ${f6(w.z1)} ` +
-        `${f6(w.x2)} ${f6(w.y2)} ${f6(w.z2)} ${f6(w.radiusM)}`,
+      `GW ${checkIndex(w.tag, "wire tag")} ` +
+        `${checkIndex(w.segments, at("segment count"))} ` +
+        `${f6(w.x1, at("x1"))} ${f6(w.y1, at("y1"))} ${f6(w.z1, at("z1"))} ` +
+        `${f6(w.x2, at("x2"))} ${f6(w.y2, at("y2"))} ${f6(w.z2, at("z2"))} ` +
+        `${f6(w.radiusM, at("radius"))}`,
     );
   }
   // GE flag -1: ground present but no wires connect to it (loops float above the
@@ -169,17 +237,31 @@ export function buildDeck(
   lines.push("EK");
   for (const t of transmissionLines) {
     lines.push(
-      `TL ${t.tag1} ${t.segment1} ${t.tag2} ${t.segment2} ` +
-        `${f6(t.z0Ohm)} ${f6(t.lengthM)}`,
+      `TL ${checkIndex(t.tag1, "line tag1")} ` +
+        `${checkIndex(t.segment1, "line segment1")} ` +
+        `${checkIndex(t.tag2, "line tag2")} ` +
+        `${checkIndex(t.segment2, "line segment2")} ` +
+        // A negative Z0 is meaningful here: it models a crossed connection.
+        `${f6(t.z0Ohm, "line impedance")} ${f6(t.lengthM, "line length")}`,
     );
   }
   for (const s of sources) {
-    lines.push(`EX 0 ${s.tag} ${s.segment} 0 ${f6(s.vReal)} ${f6(s.vImag)}`);
+    lines.push(
+      `EX 0 ${checkIndex(s.tag, "source tag")} ` +
+        `${checkIndex(s.segment, "source segment")} 0 ` +
+        // A zero voltage component is ordinary (a purely real or imaginary
+        // drive), so these are not held to the smallest-magnitude rule.
+        `${f6any(s.vReal, "source voltage (real)")} ` +
+        `${f6any(s.vImag, "source voltage (imaginary)")}`,
+    );
   }
-  lines.push(`FR 0 1 0 0 ${f6(freqMhz)} 0`);
+  lines.push(`FR 0 1 0 0 ${f6(freqMhz, "frequency")} 0`);
   lines.push(
-    `RP 0 ${grid.ntheta} ${grid.nphi} ${RP_OPTION_CODE} ` +
-      `${f3(grid.theta0)} ${f3(grid.phi0)} ${f3(grid.dtheta)} ${f3(grid.dphi)}`,
+    `RP 0 ${checkIndex(grid.ntheta, "grid ntheta")} ` +
+      `${checkIndex(grid.nphi, "grid nphi")} ${RP_OPTION_CODE} ` +
+      // Zero angles and steps are ordinary: a single cut has no step.
+      `${f3any(grid.theta0, "grid theta0")} ${f3any(grid.phi0, "grid phi0")} ` +
+      `${f3any(grid.dtheta, "grid dtheta")} ${f3any(grid.dphi, "grid dphi")}`,
   );
   lines.push("EN");
   return `${lines.join("\n")}\n`;
