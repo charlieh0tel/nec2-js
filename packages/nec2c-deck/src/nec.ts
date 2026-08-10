@@ -1,9 +1,11 @@
-// Emit NEC-2 decks and parse nec2c output. Port of the pure parts of
-// the retired Python nec.py.
+// Emit NEC-2 decks and parse nec2c output.
 //
-// The subprocess execution (run_nec) is intentionally not ported. A NecRunner
-// abstraction is exported instead, for later wiring to a WebAssembly build of
-// nec2c.
+// Nothing here runs a solver. NecRunner names the shape of one so a caller can
+// supply it: the nec2c-wasm package, or a native nec2c binary. Keeping the
+// solver out is what lets this package have no dependencies and run anywhere.
+//
+// buildDeck writes standard NEC-2 cards, but the parsers are keyed to nec2c's
+// exact column layout and will not read output from other NEC implementations.
 
 // One straight NEC wire (GW card).
 //   tag: NEC tag number.

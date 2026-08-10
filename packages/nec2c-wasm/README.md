@@ -50,7 +50,9 @@ try {
   await runNec(deck);
 } catch (e) {
   if (e instanceof Nec2cError) {
-    console.error(e.exitCode, e.output); // -1, "... GEOMETRY DATA CARD ERROR ..."
+    // exitCode is whatever nec2c returned, e.g. -1 for a bad card or -4 for
+    // its internal abort path.
+    console.error(e.exitCode, e.output); // "... GEOMETRY DATA CARD ERROR ..."
   }
 }
 ```
@@ -65,8 +67,8 @@ also carries `e.deck`, so a failure can be diagnosed without re-running it.
 A fresh WebAssembly instance is created per call. nec2c keeps extensive
 file-scope global state and the module is built with `EXIT_RUNTIME=1`, so
 instances cannot be reused -- but the factory is imported once and is cheap to
-re-invoke. Expect roughly 3-4x native runtime; the fixture deck runs in about
-8 ms against 2 ms native. Sequential calls are verified identical.
+re-invoke. Expect roughly 3-4x native runtime. Absolute numbers depend on the
+machine; `npm run test:parity` reports both for your own.
 
 ## Provenance
 
@@ -74,8 +76,12 @@ re-invoke. Expect roughly 3-4x native runtime; the fixture deck runs in about
   <https://www.qsl.net/5b4az/>.
 - Obtained from the Debian/Ubuntu source package `nec2c` 1.3.1-3:
   `nec2c_1.3.1.orig.tar.bz2`, md5 `0d86f0ae43679b9e4a3a4e3877ab62f2`.
-- `third_party/nec2c/` holds the **pristine upstream 1.3.1 sources** from that
-  tarball, unmodified.
+- `third_party/nec2c/` holds the compiled sources and their documentation from
+  that tarball, unmodified. It is a subset, not a copy of the whole tree: the
+  `.c`/`.h` files named by `nec2c_SOURCES`, plus `configure.ac`, `Makefile.am`,
+  `config.h.in`, `COPYING`, `README`, `AUTHORS`, `ChangeLog` and `NEWS`. The
+  generated autotools files, the man page and the pixmaps are not vendored --
+  `build.sh` calls `emcc` directly and needs no `./configure` step.
 - The Debian packaging adds one patch, `gnome-common-migration.patch`, which
   rewrites `autogen.sh` only and changes no compiled code. It is vendored for
   provenance but is not applied by this build.

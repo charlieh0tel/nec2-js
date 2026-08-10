@@ -92,5 +92,9 @@ emcc "${common_flags[@]}" "${srcpaths[@]}" -o "$outdir/nec2c.mjs"
 # sibling .wasm.
 emcc "${common_flags[@]}" -sSINGLE_FILE=1 "${srcpaths[@]}" -o "$outdir/nec2c-inline.mjs"
 
+# emcc marks the .wasm executable; it is data, and the committed mode is 0644.
+# Left alone, every rebuild would show up as a mode change.
+chmod 644 "$outdir/nec2c.wasm"
+
 echo "built with emcc $EMCC_VERSION:"
 ls -l "$outdir/nec2c.mjs" "$outdir/nec2c.wasm" "$outdir/nec2c-inline.mjs"
