@@ -89,6 +89,37 @@ describe("parseOutput", () => {
     assert.deepEqual(feedCurrent(result, 999999), { re: 0, im: 0 });
   });
 
+  it("rejects output holding more than one set of results", () => {
+    // nec2c emits a full set of sections per frequency step. Keeping one set
+    // and attributing it to the whole run is the failure this guards against.
+    assert.throws(
+      () => parseOutput(SAMPLE_OUTPUT + SAMPLE_OUTPUT),
+      /2 ANTENNA INPUT PARAMETERS sections/,
+    );
+  });
+
+  it("rejects a malformed row rather than truncating the list", () => {
+    // Dropping rows here would silently lose feed points from a multi-source
+    // model and still return a well-formed result.
+    const broken = SAMPLE_OUTPUT.replace(
+      "  200     1  1.0000E+00  0.0000E+00  5.0000E-03 -5.0000E-03  1.0000E+02   1.0000E+02  5.0E-03 -5.0E-03  2.5E-03",
+      "  200     1  1.0000E+00  0.0000E+00  5.0000E-03 -5.0000E-03",
+    );
+    assert.throws(() => parseOutput(broken), /malformed ANTENNA INPUT/);
+  });
+
+  it("is not fooled by a section name echoed from a comment card", () => {
+    // nec2c copies CM cards verbatim into its COMMENTS block, so matching on
+    // the bare words would pick up the comment instead of the real section.
+    const withComment = `
+                               ---------------- COMMENTS ----------------
+                               RADIATION PATTERNS of a test antenna
+${SAMPLE_OUTPUT}`;
+    const result = parseOutput(withComment);
+    assert.equal(result.pattern.length, 3);
+    assert.equal(result.sources.length, 2);
+  });
+
   it("returns empty sections for text with no results", () => {
     const result = parseOutput("nothing to see here\n");
     assert.deepEqual(result.sources, []);

@@ -209,18 +209,31 @@ function isFloat(token: string): boolean {
 // Columns: tag seg V_re V_im I_re I_im Z_re Z_im Y_re Y_im power.
 function parseSources(lines: string[], start: number): SourceResult[] {
   const results: SourceResult[] = [];
-  // Skip the two-line column header following the section title.
-  let i = start + 3;
-  while (i < lines.length) {
+  let seenData = false;
+  for (let i = start; i < lines.length; i++) {
     const line = lines[i];
     if (line === undefined) {
-      break;
+      continue;
     }
     const tokens = tokenize(line);
     const t0 = tokens[0];
-    if (tokens.length < 11 || t0 === undefined || !isFloat(t0)) {
-      break;
+    const looksLikeData = tokens.length >= 11 && t0 !== undefined && isFloat(t0);
+    if (!looksLikeData) {
+      // A row that fails to parse *inside* the block would otherwise truncate
+      // the list and hand back a short but well-formed result, losing feed
+      // points without a word. Ending the section is only valid before the
+      // data starts (the column headers) or after it.
+      if (seenData && t0 !== undefined && isFloat(t0)) {
+        throw new Error(
+          `malformed ANTENNA INPUT PARAMETERS row: ${JSON.stringify(line)}`,
+        );
+      }
+      if (seenData) {
+        break;
+      }
+      continue;
     }
+    seenData = true;
     results.push({
       tag: Number.parseInt(t0, 10),
       segment: Number.parseInt(tokens[1] ?? "", 10),
@@ -229,7 +242,6 @@ function parseSources(lines: string[], start: number): SourceResult[] {
       zReal: Number(tokens[6]),
       zImag: Number(tokens[7]),
     });
-    i += 1;
   }
   return results;
 }
@@ -310,27 +322,65 @@ function parseCurrents(lines: string[], start: number): SegmentCurrent[] {
   return results;
 }
 
+// A section title is centered and fenced with dashes:
+//     --------- ANTENNA INPUT PARAMETERS ---------
+// Matching the fenced form rather than the bare words matters: nec2c echoes CM
+// comment cards verbatim into its COMMENTS block, so a deck whose comment
+// mentions a section name would otherwise be mistaken for that section.
+function sectionTitle(line: string, title: string): boolean {
+  return new RegExp(`^\\s*-+\\s*${title}\\s*-+\\s*$`).test(line);
+}
+
 // Parse nec2c output text into an NecResult.
+//
+// One deck, one set of results. nec2c emits a full set of sections per
+// frequency step and per RP card, and this shape has nowhere to record which
+// frequency a row belongs to, so rather than silently keeping one set and
+// attributing it to the whole run, repeats are rejected. Run one frequency per
+// deck (buildDeck emits FR 0 1) and combine the results yourself.
 export function parseOutput(text: string): NecResult {
   // Match Python str.splitlines(): split on any newline flavour.
   const lines = text.split(/\r\n|\r|\n/);
-  let sources: SourceResult[] = [];
-  let pattern: PatternPoint[] = [];
-  let currents: SegmentCurrent[] = [];
+  const starts = {
+    "ANTENNA INPUT PARAMETERS": [] as number[],
+    "CURRENTS AND LOCATION": [] as number[],
+    "RADIATION PATTERNS": [] as number[],
+  };
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
     if (line === undefined) {
       continue;
     }
-    if (line.includes("ANTENNA INPUT PARAMETERS")) {
-      sources = parseSources(lines, idx);
-    } else if (line.includes("CURRENTS AND LOCATION")) {
-      // Data rows begin after the title and two-line column header.
-      currents = parseCurrents(lines, idx + 4);
-    } else if (line.includes("RADIATION PATTERNS")) {
-      // Data rows begin after the three-line column header.
-      pattern = parsePattern(lines, idx + 4);
+    for (const title of Object.keys(starts) as (keyof typeof starts)[]) {
+      if (sectionTitle(line, title)) {
+        starts[title].push(idx);
+      }
     }
   }
-  return { sources, pattern, currents };
+
+  for (const [title, found] of Object.entries(starts)) {
+    if (found.length > 1) {
+      throw new Error(
+        `nec2c output has ${found.length} ${title} sections; ` +
+          "parseOutput handles one set of results per deck. Sweep by running " +
+          "one frequency per deck.",
+      );
+    }
+  }
+
+  // Each parser scans forward for its first data-shaped row, so it is handed
+  // the title line rather than a hardcoded header length. The headers differ in
+  // length between sections and grow extra lines for some RP modes, so an
+  // offset would be both wrong and fragile.
+  const at = (title: keyof typeof starts) => starts[title][0];
+  const sourceStart = at("ANTENNA INPUT PARAMETERS");
+  const currentStart = at("CURRENTS AND LOCATION");
+  const patternStart = at("RADIATION PATTERNS");
+
+  return {
+    sources: sourceStart === undefined ? [] : parseSources(lines, sourceStart),
+    currents:
+      currentStart === undefined ? [] : parseCurrents(lines, currentStart),
+    pattern: patternStart === undefined ? [] : parsePattern(lines, patternStart),
+  };
 }
