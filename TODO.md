@@ -130,6 +130,20 @@ resistance, and the value at 0.02wl:
       disagreeing, which is its own kind of confirmation that the regime is
       where the method comes apart. An earlier note here read this as a bug in
       nec2c; that was wrong, and only running the other three showed it.
+- [x] Not a segmentation effect, though the transition sits suspiciously near
+      the segment length. Holding 0.02wl and sweeping the segment count from 3
+      to 81 -- a 27x range, putting the height anywhere from an eighth of a
+      segment to three of them -- leaves the error at about 91% throughout. An
+      earlier note here guessed the opposite. Refining a model near ground does
+      not rescue it; only height does.
+- [ ] There is a rule of thumb in circulation that NEC-2 wants a wire some
+      0.0001wl to 0.001wl clear of the ground, and that Sommerfeld cannot have
+      it touching. Unverified here, and not from a source this repo has
+      checked. If it holds, it does not conflict with the measurements: every
+      height swept here clears that floor and is still wrong, which would make
+      the floor about the model being admissible rather than about the answer
+      being trustworthy. Worth finding the actual statement in the NEC-2
+      documentation before repeating it anywhere users will read it.
 - [ ] nec2++ is the outlier, and in the useful direction: two orders of
       magnitude closer to the limit at 0.02wl. Worth finding what it does
       differently before assuming it is simply better -- it may have changed
