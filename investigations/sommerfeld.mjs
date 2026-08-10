@@ -8,18 +8,31 @@
 // the fault.
 //
 // Usage:
-//   node investigations/sommerfeld.mjs            # the bundled wasm nec2c
-//   node investigations/sommerfeld.mjs <command>  # any CLI taking -i IN -o OUT
+//   node investigations/sommerfeld.mjs                     # bundled wasm nec2c
+//   node investigations/sommerfeld.mjs <style> <command>   # another solver
 //
-// The second form is the point of this script: it runs an external solver
-// through the same decks so the two can be compared directly. nec2++'s `necpp`
-// executable takes the same -i/-o arguments as nec2c, so
+// The second form is the point of this script: running an alternative
+// implementation over the same decks is what separates a bug in one solver
+// from a limit of the NEC-2 method, and that is the question standing between
+// this repo and packaging nec2++ (see TODO.md).
 //
-//   node investigations/sommerfeld.mjs /usr/local/bin/necpp
+// NEC implementations disagree about how to be invoked, so <style> names the
+// convention:
 //
-// answers whether nec2c's numbers are a bug in nec2c or a limit of the NEC-2
-// method itself -- which is the question standing between this repo and
-// packaging nec2++ (see TODO.md).
+//   flags     -i IN -o OUT          nec2c
+//   attached  -iIN -oOUT            nec2++
+//   stdio     deck on stdin, output on stdout    nec2dxs and other Fortran
+//                                               NEC-2 builds
+//   jobname   NAME (reads NAME.nec, writes NAME.res)   aegnec2
+//
+// For example:
+//   node investigations/sommerfeld.mjs attached ~/src/necpp/_install_/bin/nec2++
+//   node investigations/sommerfeld.mjs stdio    ~/src/nec2/nec2dxs
+//   node investigations/sommerfeld.mjs jobname  ~/src/aegnec2/_install_/bin/aegnec2
+//
+// A solver needing a shared library it cannot find on its own wants
+// LD_LIBRARY_PATH set in the environment; this script passes the environment
+// through untouched.
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -65,32 +78,89 @@ function dipoleDeck(heightWl, ground) {
   });
 }
 
-// Wraps an external file-in/file-out solver as a runner, so an alternative
-// implementation can be measured with the same decks.
-function externalRunner(command) {
+// How a given solver wants to be invoked. Each entry turns a deck and a
+// scratch directory into the argv, stdin and output location to use.
+const STYLES = {
+  flags: (dir) => ({
+    args: ["-i", join(dir, "in.nec"), "-o", join(dir, "out.txt")],
+    output: join(dir, "out.txt"),
+  }),
+  attached: (dir) => ({
+    args: [`-i${join(dir, "in.nec")}`, `-o${join(dir, "out.txt")}`],
+    output: join(dir, "out.txt"),
+  }),
+  stdio: (dir) => ({
+    args: [],
+    stdin: join(dir, "in.nec"),
+    // Fortran NEC-2 builds write the report to stdout.
+    output: null,
+  }),
+  jobname: (dir) => ({
+    // Reads <name>.nec and writes <name>.res beside it.
+    args: [join(dir, "in")],
+    output: join(dir, "in.res"),
+  }),
+};
+
+// Wraps an external solver as a runner, so an alternative implementation can be
+// measured with the same decks.
+function externalRunner(style, command) {
+  const plan = STYLES[style];
+  if (!plan) {
+    throw new Error(
+      `unknown style ${JSON.stringify(style)}; expected one of ${Object.keys(STYLES).join(", ")}`,
+    );
+  }
   return async (deck) => {
     // nec2c has a fixed-size filename buffer and aborts on long paths, so keep
-    // the working directory short.
+    // the scratch directory short.
     const dir = mkdtempSync(join(tmpdir(), "sf-"));
-    const inPath = join(dir, "in.nec");
-    const outPath = join(dir, "out.txt");
-    writeFileSync(inPath, deck);
-    execFileSync(command, ["-i", inPath, "-o", outPath], { stdio: "ignore" });
-    return readFileSync(outPath, "utf8");
+    writeFileSync(join(dir, "in.nec"), deck);
+    const { args, stdin, output } = plan(dir);
+    const stdout = execFileSync(command, args, {
+      input: stdin ? readFileSync(stdin) : undefined,
+      stdio: [stdin ? "pipe" : "ignore", "pipe", "ignore"],
+      maxBuffer: 64 * 1024 * 1024,
+    });
+    return output ? readFileSync(output, "utf8") : stdout.toString();
   };
 }
 
-const command = process.argv[2];
-const runner = command ? externalRunner(command) : runWasm;
+// nec2c-deck's parsers are keyed to nec2c's formatting, and the Fortran NEC-2
+// builds differ from it in two ways that matter here. Both are presentation,
+// not content, so normalizing is enough to compare the numbers.
+function normalize(text) {
+  return (
+    text
+      // Section titles are fenced with spaced dashes: "- - - TITLE - - -".
+      .replace(/^(\s*)((?:- )+)([A-Z][A-Z .]*[A-Z])( -)+\s*$/gm, "$1--- $3 ---")
+      // Fixed-column fields have no separator to spare, so a negative value
+      // runs straight onto the one before it: "1.0E-02-2.2E-03".
+      .replace(/(E[+-]\d\d)(?=-)/g, "$1 ")
+  );
+}
+
+const [style, command] = process.argv.slice(2);
+if (style && !command) {
+  console.error(
+    `usage: sommerfeld.mjs [<style> <command>]\n       styles: ${Object.keys(STYLES).join(", ")}`,
+  );
+  process.exit(2);
+}
+const runner = command ? externalRunner(style, command) : runWasm;
 
 const feedResistance = async (heightWl, ground) => {
-  const result = parseOutput(await runner(dipoleDeck(heightWl, ground)));
+  const result = parseOutput(
+    normalize(await runner(dipoleDeck(heightWl, ground))),
+  );
   const source = result.sources[0];
   if (!source) throw new Error("no source parsed");
   return source.zReal;
 };
 
-console.log(`solver: ${command ?? "nec2c-wasm (bundled)"}`);
+console.log(
+  `solver: ${command ? `${command} (${style})` : "nec2c-wasm (bundled)"}`,
+);
 console.log(
   `horizontal half-wave dipole, ${FREQ_MHZ} MHz, feedpoint resistance in ohms\n`,
 );
@@ -99,6 +169,7 @@ console.log(
 );
 
 let worst = 0;
+let failures = 0;
 for (const heightWl of [
   0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.15, 0.25, 0.5, 1,
 ]) {
@@ -116,16 +187,26 @@ for (const heightWl of [
     const shown = `${errorPct >= 0 ? "+" : ""}${errorPct.toFixed(2)}%`;
     line = `${`${heightWl}`.padStart(8)}wl ${perfect.toFixed(3).padStart(14)} ${limit.toFixed(3).padStart(18)} ${shown.padStart(14)}   ${diverged ? "DIVERGES" : "agrees"}`;
   } catch (e) {
-    line = `${`${heightWl}`.padStart(8)}wl   failed: ${e.message.slice(0, 60)}`;
+    // A solver that refuses or crashes has also failed to reach the limit; it
+    // just fails louder than one that returns a confident wrong number.
+    failures += 1;
+    line = `${`${heightWl}`.padStart(8)}wl   failed: ${e.message.split("\n")[0].slice(0, 60)}`;
   }
   console.log(line);
 }
 
 console.log("");
+if (failures) {
+  console.log(
+    `${failures} height${failures === 1 ? "" : "s"} produced no answer at all, so this solver did not meet the limit there either.`,
+  );
+}
 console.log(
   worst > AGREEMENT_PCT
-    ? `Worst divergence ${worst.toFixed(1)}%. The limit is exact, so a gap this size is the Sommerfeld evaluation being wrong, not the model being hard.`
-    : "Converges to perfect ground at every height: the Sommerfeld evaluation is sound over this range.",
+    ? `Worst divergence ${worst.toFixed(1)}% of the heights that did solve. The limit is exact, so a gap of that size is the Sommerfeld evaluation, not the model being hard.`
+    : failures
+      ? "Every height that solved met the limit."
+      : "Converges to perfect ground at every height: the Sommerfeld evaluation is sound over this range.",
 );
 console.log(
   `\nNote: divergence sets in where the height approaches the segment length (${(LAMBDA / 11).toFixed(3)} m here), a geometry NEC-2 itself warns about. Running the same sweep through another NEC-2 implementation is what separates a bug in one solver from a limit of the method.`,

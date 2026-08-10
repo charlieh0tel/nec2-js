@@ -79,9 +79,12 @@ perfect conductor there. The error reaches +91.9% at 0.02 wavelengths and grows
 below that. A ground-mounted vertical, the obvious reason to want finite
 ground, sits in exactly that regime.
 
-`investigations/sommerfeld.mjs` at the repo root measures it, and takes another
-solver's command to compare. Whether this is nec2c's bug or a limit of the
-NEC-2 method is not yet settled; see `TODO.md`.
+This is NEC-2's behaviour rather than something nec2c introduced: aegnec2,
+which links the original Fortran SOMNEC, reproduces these numbers to three
+digits, and the original Fortran NEC-2D segfaults in the same regime. nec2++
+does markedly better there. `investigations/sommerfeld.mjs` at the repo root
+measures it and takes another solver's command to compare; `TODO.md` has the
+figures.
 
 ### Performance
 
