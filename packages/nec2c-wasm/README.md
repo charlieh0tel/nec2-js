@@ -87,9 +87,11 @@ pinned toolchain** -- other Emscripten versions produce different (working, but
 different) output. `build.sh` pins `EMCC_VERSION` and refuses to run against
 anything else.
 
+The prebuilt artifacts are committed, so this is only needed to change them:
+
 ```sh
 git submodule update --init   # emsdk
-npm run build                 # installs/activates the pinned emcc, then compiles
+npm run build:wasm            # installs/activates the pinned emcc, then compiles
 ```
 
 Verify against native nec2c (Debian/Ubuntu: `apt install nec2c`):

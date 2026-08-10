@@ -27,7 +27,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "bash build.sh",
+    "build:wasm": "bash build.sh",
     "test": "node test/smoke.mjs"
   },
   "repository": {
