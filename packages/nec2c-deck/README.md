@@ -57,6 +57,14 @@ anything.
 parsers are keyed to nec2c's exact column layout and will not read output from
 other NEC implementations. Hence the package name.
 
+**RP modes.** `parseOutput` reads far-field patterns. The column positions hold
+for every far-field `RP` mode, so a deck you wrote yourself with a different
+option code still parses -- but the code changes what two columns *mean*
+without moving them: the gain pair is major/minor axis or vertical/horizontal
+(the `X` digit), and the total is a power gain or a directive gain (`D`). Both
+arrive as `totalGainDb`, so you have to know which you asked for. A near-field
+run (`RP 1`) prints a different section entirely and is rejected.
+
 ## Formats
 
 `import "nec2c-deck"` gives you `dist/` -- compiled ES2022 with `.d.ts` and

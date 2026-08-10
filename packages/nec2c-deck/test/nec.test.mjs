@@ -163,6 +163,19 @@ ${SAMPLE_OUTPUT}`;
     assert.throws(() => parseOutput(diverged), /non-finite source impedance/);
   });
 
+  it("rejects a near-field run rather than reporting no radiation", () => {
+    // RP 1 prints location and field columns under its own title. An empty
+    // pattern would read as an antenna that radiates nothing.
+    const nearField = `
+                             ------- RADIATED FIELDS NEAR GROUND --------
+
+    ------- LOCATION -------     --- E(THETA) ---     ---- E(PHI) ----
+      RHO    PHI        Z           MAG    PHASE         MAG    PHASE
+    0.0000   0.00     1.0000     1.0E-01    0.00     1.0E-01    90.00
+`;
+    assert.throws(() => parseOutput(nearField), /RADIATED FIELDS NEAR GROUND/);
+  });
+
   it("returns empty sections for text with no results", () => {
     const result = parseOutput("nothing to see here\n");
     assert.deepEqual(result.sources, []);

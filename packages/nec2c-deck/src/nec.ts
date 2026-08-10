@@ -353,6 +353,14 @@ export const SENSE_UNDEFINED = "UNDEFINED";
 // Layout: theta phi vert horiz total axial tilt [sense] e_theta_mag
 // e_theta_phase e_phi_mag e_phi_phase. The textual sense column is blank at
 // pattern nulls; see SENSE_UNDEFINED.
+//
+// These column positions hold for every far-field RP mode -- verified against
+// nec2c for each XNDA digit. What the option code changes is what two of the
+// columns mean, not where they sit: the gain columns are major/minor axis or
+// vertical/horizontal (X), and the total is a power gain or a directive gain
+// (D). Both are read here as totalGainDb, so the caller has to know which it
+// asked for. Near-field runs (RP 1) are a different section entirely and are
+// rejected in parseOutput.
 function parsePattern(lines: string[], start: number): PatternPoint[] {
   const points: PatternPoint[] = [];
   let seenData = false;
@@ -456,6 +464,7 @@ export function parseOutput(text: string): NecResult {
     "CURRENTS AND LOCATION": [] as number[],
     "RADIATION PATTERNS": [] as number[],
   };
+  let nearGround = false;
   for (let idx = 0; idx < lines.length; idx++) {
     const line = lines[idx];
     if (line === undefined) {
@@ -466,6 +475,19 @@ export function parseOutput(text: string): NecResult {
         starts[title].push(idx);
       }
     }
+    if (sectionTitle(line, "RADIATED FIELDS NEAR GROUND")) {
+      nearGround = true;
+    }
+  }
+
+  // RP 1 asks for near-field values at points in space, which nec2c prints
+  // under its own title with location and field columns that have nothing in
+  // common with a radiation pattern. Say so, rather than handing back an empty
+  // pattern that looks like an antenna with no radiation.
+  if (nearGround && starts["RADIATION PATTERNS"].length === 0) {
+    throw new Error(
+      "nec2c output holds RADIATED FIELDS NEAR GROUND (an RP 1 near-field run), which this parser does not read; it reads far-field RADIATION PATTERNS",
+    );
   }
 
   for (const [title, found] of Object.entries(starts)) {
