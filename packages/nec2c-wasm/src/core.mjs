@@ -102,11 +102,16 @@ export function createRunner(createNec2c) {
     const hostProcess = globalThis.process;
     const priorExitCode = hostProcess?.exitCode;
 
-    const returned = module.callMain(["-i", INPUT_PATH, "-o", OUTPUT_PATH]);
-    if (typeof returned === "number") exitCode = returned;
-
-    if (hostProcess && hostProcess.exitCode !== priorExitCode) {
-      hostProcess.exitCode = priorExitCode;
+    // finally, not a straight-line restore: callMain can throw rather than
+    // exit (an Emscripten abort, a trap, memory growth failing), and the host's
+    // exit code must not be left changed on the way out.
+    try {
+      const returned = module.callMain(["-i", INPUT_PATH, "-o", OUTPUT_PATH]);
+      if (typeof returned === "number") exitCode = returned;
+    } finally {
+      if (hostProcess && hostProcess.exitCode !== priorExitCode) {
+        hostProcess.exitCode = priorExitCode;
+      }
     }
 
     // Read the output file even when the run failed, since that is where the
