@@ -1,0 +1,9 @@
+node_modules/
+packages/nec2c-deck/dist/
+
+# Emscripten writes its cache into the submodule tree.
+emsdk/upstream/
+emsdk/node/
+emsdk/downloads/
+emsdk/.emscripten*
+*~

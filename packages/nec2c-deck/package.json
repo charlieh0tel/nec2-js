@@ -1,0 +1,33 @@
+{
+  "name": "nec2c-deck",
+  "version": "0.1.0",
+  "description": "Build NEC-2 input decks and parse nec2c output. No dependencies, no solver.",
+  "keywords": ["nec2c", "nec2", "antenna", "electromagnetics", "ham-radio", "parser"],
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./source": "./src/index.ts"
+  },
+  "source": "./src/index.ts",
+  "files": ["dist", "src", "LICENSE", "README.md"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/charlieh0tel/nec2c-js.git",
+    "directory": "packages/nec2c-deck"
+  },
+  "homepage": "https://github.com/charlieh0tel/nec2c-js/tree/main/packages/nec2c-deck"
+}

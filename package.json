@@ -1,0 +1,14 @@
+{
+  "name": "nec2c-js-workspace",
+  "private": true,
+  "description": "Workspace root for nec2c-wasm and nec2c-deck; not published.",
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
