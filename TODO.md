@@ -104,6 +104,30 @@ discriminant is a small price. B is tempting for being non-breaking, but
 ordering encoded across two arrays is the kind of thing that passes review and
 then bites.
 
+### nec2c's Sommerfeld ground looks wrong close to earth
+
+`investigations/sommerfeld.mjs` measures the one thing about a finite ground
+that needs no judgement: as conductivity goes to infinity a lossy half-space
+becomes a perfect conductor, so `GN 2` must converge to the `GN 1` answer for
+the same geometry. Run it with no arguments for the bundled wasm nec2c, or pass
+a solver command to compare another implementation.
+
+nec2c converges exactly at and above 0.05 wavelengths of height, and fails
+below it -- +91.9% at 0.02wl, and worse further down. Independently, a
+ground-mounted vertical over soil disagreed with nec2++ by 29.6% where the two
+agreed to 0.01% over perfect ground, which puts the fault in the Sommerfeld
+evaluation rather than in geometry or segmentation.
+
+- [ ] Settle whether this is nec2c's bug or NEC-2's limit. The divergence sets
+      in where the height approaches the segment length, a regime NEC-2 itself
+      warns about, so the sweep against nec2c alone cannot tell the two apart.
+      Running the same sweep through nec2++ can: if it converges where nec2c
+      does not, the method is sound and the implementation is not. That is the
+      evidence the packaging question below turns on.
+- [ ] Until then, say so in `nec2c-wasm`'s README. Someone modelling a
+      ground-mounted vertical -- the obvious use for finite ground -- lands
+      exactly in the broken regime and gets a plausible wrong number.
+
 ### nec2++
 
 - [x] Licence checked, and it is not a blocker. `COPYING` in
