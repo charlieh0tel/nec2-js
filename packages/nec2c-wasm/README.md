@@ -79,6 +79,9 @@ perfect conductor there. The error reaches +91.9% at 0.02 wavelengths and grows
 below that. A ground-mounted vertical, the obvious reason to want finite
 ground, sits in exactly that regime.
 
+Refining the mesh does not rescue it: the error holds at about 91% across a
+27x range of segment lengths. Only height does.
+
 This is NEC-2's behaviour rather than something nec2c introduced: aegnec2,
 which links the original Fortran SOMNEC, reproduces these numbers to three
 digits, and the original Fortran NEC-2D segfaults in the same regime. nec2++
