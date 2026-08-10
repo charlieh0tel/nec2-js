@@ -47,6 +47,11 @@ second ground medium (`GD`), the interaction-approximation distance (`KH`),
 near fields (`NE`/`NH`), and the print and execution controls (`XQ`, `PT`,
 `PQ`, `PL`, `NX`, `CP`, `WG`).
 
+`GM` cards are emitted after every `GW`, so a transform acts on the whole
+structure or, via `fromTag`, on a tail of it. Interleaving geometry and
+transforms freely is not expressible; define the part you want to replicate
+last.
+
 `EX` is written as type 0 only, an applied-voltage source. Plane-wave
 incidence (types 1-3) and the elementary current source (type 4) would let you
 model a receiving antenna or compute radar cross-section, and are not
@@ -148,7 +153,34 @@ every tag on each copy, which is what keeps the copies addressable by a later
 defined after it, so replicating part of a model means defining that part last.
 
 `parseOutput` reads the `ANTENNA INPUT PARAMETERS`, `CURRENTS AND LOCATION`,
-and `RADIATION PATTERNS` sections into `sources`, `currents`, and `pattern`.
+`RADIATION PATTERNS` and `POWER BUDGET` sections into `sources`, `currents`,
+`pattern` and `power`.
+
+### Power and efficiency
+
+`power` carries `inputW`, `radiatedW`, `structureLossW`, `networkLossW` and
+`efficiencyPercent`. It is `undefined` when nec2c printed no budget, which it
+does only for a voltage source -- the only `EX` type this package writes, so in
+practice it is always there.
+
+nec2c does not measure the radiated power. It subtracts the structure and
+network losses from the input power, and the efficiency is that quotient. The
+number therefore answers "how much of the power I put in did the wires and
+networks fail to burn", which is the radiating efficiency only when nothing
+else absorbs. **Over a lossy `GN` ground it reads high**: the power the earth
+absorbs appears in neither loss term, so it is still counted as radiated. NEC's
+average power gain (the `RP` card's `A` digit) is the honest figure there.
+
+Pair it with a `conductivity` load, which is what gives `structureLossW`
+anything to report:
+
+```js
+const { power } = parseOutput(await runNec(buildDeck({
+  ...rest,
+  loads: [{ kind: "conductivity", tag: 0, sigmaSm: 5.8e7 }],
+})));
+power.efficiencyPercent;   // copper losses, as a percentage
+```
 
 It parses **one set of results per call**. nec2c emits a full set of sections
 per frequency step and per `RP` card, and `NecResult` has nowhere to record

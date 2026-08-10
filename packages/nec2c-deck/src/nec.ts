@@ -274,10 +274,34 @@ export interface Complex {
   im: number;
 }
 
+// Parsed from POWER BUDGET. Powers are watts, efficiency a percentage.
+//
+// nec2c does not measure the radiated power: it subtracts the structure and
+// network losses from the input power (main.c: pin - pnls - ploss), and the
+// efficiency is that quotient. So the number answers "how much of the power
+// I put in did the wires and networks fail to burn", which is only the
+// radiating efficiency when nothing else absorbs. Over a lossy GN ground the
+// power the earth absorbs is not in either loss term and is still counted as
+// radiated, so efficiency there reads high -- NEC's average power gain (the
+// RP card's A digit) is the honest figure for that case.
+//
+// Rounding can make a loss term very slightly negative on a lossless model;
+// that is nec2c's arithmetic, not a parse error, so it is passed through.
+export interface PowerBudget {
+  inputW: number;
+  radiatedW: number;
+  structureLossW: number;
+  networkLossW: number;
+  efficiencyPercent: number;
+}
+
 export interface NecResult {
   sources: SourceResult[];
   pattern: PatternPoint[];
   currents: SegmentCurrent[];
+  // Absent when nec2c printed no budget, which it does only for a voltage
+  // source (the EX types this package writes).
+  power?: PowerBudget;
 }
 
 // Current on the (1-segment) feed wire with this tag, 0 if absent.
@@ -785,6 +809,55 @@ function parseCurrents(lines: string[], start: number): SegmentCurrent[] {
   return results;
 }
 
+// The budget is one printf: a title followed immediately by five labelled
+// lines. A short window is enough to find them all, and a label missing from
+// it means the report is malformed rather than shorter.
+const POWER_BUDGET_WINDOW = 8;
+
+// Read one "LABEL = value Units" line. Unlike every other section this block
+// is labelled rather than columnar, so the label is what locates the number.
+function powerField(
+  lines: string[],
+  start: number,
+  label: string,
+  field: string,
+): number {
+  const end = Math.min(lines.length, start + POWER_BUDGET_WINDOW);
+  for (let i = start; i < end; i++) {
+    const line = lines[i];
+    if (line === undefined) {
+      continue;
+    }
+    const at = line.indexOf(label);
+    if (at < 0) {
+      continue;
+    }
+    const equals = line.indexOf("=", at + label.length);
+    if (equals < 0) {
+      continue;
+    }
+    return finite(tokenize(line.slice(equals + 1))[0], field);
+  }
+  throw new Error(
+    `nec2c output has a POWER BUDGET section with no ${label} line`,
+  );
+}
+
+function parsePowerBudget(lines: string[], start: number): PowerBudget {
+  return {
+    inputW: powerField(lines, start, "INPUT POWER", "input power"),
+    radiatedW: powerField(lines, start, "RADIATED POWER", "radiated power"),
+    structureLossW: powerField(
+      lines,
+      start,
+      "STRUCTURE LOSS",
+      "structure loss",
+    ),
+    networkLossW: powerField(lines, start, "NETWORK LOSS", "network loss"),
+    efficiencyPercent: powerField(lines, start, "EFFICIENCY", "efficiency"),
+  };
+}
+
 // A section title is centered and fenced with dashes:
 //     --------- ANTENNA INPUT PARAMETERS ---------
 // Matching the fenced form rather than the bare words matters: nec2c echoes CM
@@ -808,6 +881,7 @@ export function parseOutput(text: string): NecResult {
     "ANTENNA INPUT PARAMETERS": [] as number[],
     "CURRENTS AND LOCATION": [] as number[],
     "RADIATION PATTERNS": [] as number[],
+    "POWER BUDGET": [] as number[],
   };
   let nearGround = false;
   for (let idx = 0; idx < lines.length; idx++) {
@@ -851,12 +925,17 @@ export function parseOutput(text: string): NecResult {
   const sourceStart = at("ANTENNA INPUT PARAMETERS");
   const currentStart = at("CURRENTS AND LOCATION");
   const patternStart = at("RADIATION PATTERNS");
+  const powerStart = at("POWER BUDGET");
 
-  return {
+  const result: NecResult = {
     sources: sourceStart === undefined ? [] : parseSources(lines, sourceStart),
     currents:
       currentStart === undefined ? [] : parseCurrents(lines, currentStart),
     pattern:
       patternStart === undefined ? [] : parsePattern(lines, patternStart),
   };
+  if (powerStart !== undefined) {
+    result.power = parsePowerBudget(lines, powerStart);
+  }
+  return result;
 }

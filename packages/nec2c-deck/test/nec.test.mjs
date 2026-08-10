@@ -44,6 +44,16 @@ const SAMPLE_OUTPUT = `
    60.00      0.00  -999.99  -999.99  -999.99      0.0000      0.00 LINEAR  0.0E+00      0.00  0.0E+00      0.00
 `;
 
+// A labelled block rather than a table, and the only section shaped that way.
+const POWER_BUDGET = `
+                               ---------- POWER BUDGET ---------
+                               INPUT POWER   =  1.1297E-02 Watts
+                               RADIATED POWER=  9.0000E-03 Watts
+                               STRUCTURE LOSS=  2.2970E-03 Watts
+                               NETWORK LOSS  =  0.0000E+00 Watts
+                               EFFICIENCY    =   79.67 Percent
+`;
+
 const WIRES = [
   {
     tag: 1,
@@ -129,6 +139,40 @@ describe("parseOutput", () => {
     assert.ok(segmentMagnitude(result.currents[0]) >= 0);
     const feed = feedCurrent(result, result.sources[0].tag);
     assert.ok(Math.hypot(feed.re, feed.im) > 0, "feed current must be nonzero");
+  });
+
+  it("reads the power budget from a real nec2c run", () => {
+    const { power } = parseOutput(fixture("loop.out.txt"));
+    assert.ok(power, "fixture should carry a power budget");
+    assert.ok(Math.abs(power.inputW - 1.1297e-2) < 1e-6);
+    assert.ok(Math.abs(power.radiatedW - 1.1297e-2) < 1e-6);
+    assert.equal(power.structureLossW, 0);
+    // A lossless model rounds the network loss slightly negative. That is
+    // nec2c's arithmetic, not a parse error.
+    assert.ok(Math.abs(power.networkLossW) < 1e-15);
+    assert.equal(power.efficiencyPercent, 100);
+  });
+
+  it("leaves power undefined when no budget was printed", () => {
+    // nec2c prints the block only for a voltage source.
+    assert.equal(parseOutput(SAMPLE_OUTPUT).power, undefined);
+  });
+
+  it("rejects a power budget missing a line", () => {
+    // The block comes from one printf, so a short one is malformed rather
+    // than a partial report to be passed along.
+    const truncated = POWER_BUDGET.replace(
+      /^.*EFFICIENCY.*$/m,
+      "                               EFFICIENCY",
+    );
+    assert.throws(() => parseOutput(truncated), /no EFFICIENCY line/);
+  });
+
+  it("rejects more than one power budget", () => {
+    assert.throws(
+      () => parseOutput(POWER_BUDGET + POWER_BUDGET),
+      /2 POWER BUDGET sections/,
+    );
   });
 
   it("returns zero from feedCurrent for an unknown tag", () => {
