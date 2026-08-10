@@ -24,9 +24,45 @@ const WIRE = {
 const SOURCE = { tag: 1, segment: 5, vReal: 1, vImag: 0 };
 const GRID = { ntheta: 3, nphi: 1, theta0: 0, phi0: 0, dtheta: 30, dphi: 0 };
 
+// A quarter-wave vertical standing on the ground, which only works as a model
+// if the deck bonds it to the ground plane. Free-space wavelength at 145.9 MHz
+// is 2.055 m.
+const QUARTER_WAVE_M = 299.792458 / 145.9 / 4;
+const VERTICAL = {
+  tag: 1,
+  segments: 9,
+  x1: 0,
+  y1: 0,
+  z1: 0,
+  x2: 0,
+  y2: 0,
+  z2: QUARTER_WAVE_M,
+  radiusM: 0.001,
+};
+
+const solve = (options) =>
+  runNec(
+    buildDeck({
+      comments: ["t"],
+      wires: [WIRE],
+      sources: [SOURCE],
+      ground: false,
+      freqMhz: 145.9,
+      grid: GRID,
+      ...options,
+    }),
+  ).then(parseOutput);
+
 describe("nec2c-deck + nec2c-wasm", () => {
   it("solves a dipole and parses a plausible feedpoint impedance", async () => {
-    const deck = buildDeck(["dipole"], [WIRE], [SOURCE], false, 145.9, GRID);
+    const deck = buildDeck({
+      comments: ["dipole"],
+      wires: [WIRE],
+      sources: [SOURCE],
+      ground: false,
+      freqMhz: 145.9,
+      grid: GRID,
+    });
     const result = parseOutput(await runNec(deck));
 
     assert.equal(result.sources.length, 1);
@@ -38,6 +74,92 @@ describe("nec2c-deck + nec2c-wasm", () => {
       `feedpoint resistance ${z.zReal} outside the dipole range`,
     );
     assert.ok(z.zImag > 0, "a slightly long dipole should be inductive");
+  });
+
+  it("feeds a ground-mounted vertical against the ground plane", async () => {
+    // Without GE 1 the base segment floats and the solve is meaningless. A
+    // quarter wave over perfect ground is a half dipole: about 36 ohms.
+    const result = await solve({
+      wires: [VERTICAL],
+      sources: [{ tag: 1, segment: 1, vReal: 1, vImag: 0 }],
+      ground: true,
+      groundConnected: true,
+    });
+    const z = result.sources[0];
+    assert.ok(
+      z.zReal > 25 && z.zReal < 50,
+      `base resistance ${z.zReal} is not a quarter-wave monopole's`,
+    );
+  });
+
+  it("solves a radial ground screen under a vertical", async () => {
+    // Exercises the GN 0 + radials combination end to end; nec2c stops outright
+    // if the card is malformed or paired with the wrong ground type.
+    const result = await solve({
+      wires: [VERTICAL],
+      sources: [{ tag: 1, segment: 1, vReal: 1, vImag: 0 }],
+      ground: {
+        epsR: 13,
+        sigmaSm: 0.005,
+        radials: { count: 32, screenRadiusM: 5, wireRadiusM: 0.0008 },
+      },
+      groundConnected: true,
+    });
+    assert.equal(result.sources.length, 1);
+    assert.ok(result.sources[0].zReal > 0, "expected a solved feedpoint");
+  });
+
+  it("adds a lumped impedance load at the feed", async () => {
+    // LD type 4 puts a fixed R + jX in series with the segment, so a 100 ohm
+    // resistor should show up almost entirely in the feedpoint resistance.
+    const bare = await solve({});
+    const loaded = await solve({
+      loads: [
+        {
+          kind: "impedance",
+          tag: 1,
+          fromSegment: 5,
+          resistanceOhm: 100,
+          reactanceOhm: 0,
+        },
+      ],
+    });
+    const added = loaded.sources[0].zReal - bare.sources[0].zReal;
+    assert.ok(
+      Math.abs(added - 100) < 5,
+      `a 100 ohm load moved the feed resistance by ${added}`,
+    );
+  });
+
+  it("makes a wire lossy with a conductivity load", async () => {
+    // The card that turns a lossless model into a real one. Steel is poor
+    // enough that the loss is unmistakable in the feedpoint resistance.
+    const copper = await solve({
+      loads: [{ kind: "conductivity", tag: 1, sigmaSm: 5.8e7 }],
+    });
+    const steel = await solve({
+      loads: [{ kind: "conductivity", tag: 1, sigmaSm: 1.0e6 }],
+    });
+    assert.ok(
+      steel.sources[0].zReal > copper.sources[0].zReal,
+      `steel (${steel.sources[0].zReal}) should read more resistive than copper (${copper.sources[0].zReal})`,
+    );
+  });
+
+  it("replicates a wire with a GM transform", async () => {
+    // One GW plus a GM asking for three more copies is a four-wire structure,
+    // so nec2c should report four wires' worth of segments.
+    const one = await solve({});
+    const four = await solve({
+      transforms: [{ copies: 3, tagIncrement: 1, moveXM: 0.5 }],
+    });
+    assert.equal(four.currents.length, one.currents.length * 4);
+    // Each copy carries the incremented tag, which is what makes it
+    // addressable by a later card.
+    assert.deepEqual(
+      [...new Set(four.currents.map((c) => c.tag))].sort((a, b) => a - b),
+      [1, 2, 3, 4],
+    );
   });
 
   it("reports a deck nec2c cannot parse", async () => {
