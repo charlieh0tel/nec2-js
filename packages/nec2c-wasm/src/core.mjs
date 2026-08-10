@@ -94,8 +94,20 @@ export function createRunner(createNec2c) {
     const module = await createNec2c(moduleArgs);
 
     module.FS.writeFile(INPUT_PATH, deckText);
+
+    // Under Node, Emscripten's exit path assigns process.exitCode, so a failed
+    // nec2c run would leave the host process exiting non-zero even though the
+    // failure is reported here as an exception. Restore whatever the caller
+    // had; the exit status of their program is not ours to set.
+    const hostProcess = globalThis.process;
+    const priorExitCode = hostProcess?.exitCode;
+
     const returned = module.callMain(["-i", INPUT_PATH, "-o", OUTPUT_PATH]);
     if (typeof returned === "number") exitCode = returned;
+
+    if (hostProcess && hostProcess.exitCode !== priorExitCode) {
+      hostProcess.exitCode = priorExitCode;
+    }
 
     // Read the output file even when the run failed, since that is where the
     // diagnostic is. It is absent if nec2c aborted before opening it.

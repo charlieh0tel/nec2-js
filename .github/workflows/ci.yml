@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Typecheck, build dist, deck unit tests, and the cross-package integration
+  # test. No solver comparison here -- that is the parity job.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build --workspaces --if-present
+
+      - name: Tests
+        run: npm test
+
+  # The shipped .wasm is the product, so prove it still agrees with the real
+  # nec2c. Needs no npm install: the harness uses node builtins and the
+  # committed prebuilt module.
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nec2c
+        run: sudo apt-get update && sudo apt-get install -y nec2c
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Native vs wasm parity
+        run: node packages/nec2c-wasm/test/smoke.mjs

@@ -1,0 +1,65 @@
+name: Reproducibility
+
+# Rebuilds the committed WebAssembly artifacts from the vendored C source with
+# the pinned toolchain and fails if a single byte moved. This is the check
+# behind the claim in packages/nec2c-wasm/README.md, and the reason the emcc
+# version is pinned at all: other versions produce working but different
+# output, so without this the prebuilts could drift from their source.
+#
+# Kept off the main CI because installing the toolchain downloads ~325 MB.
+# Cached by emcc version, so it is cheap after the first run.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "packages/nec2c-wasm/build.sh"
+      - "packages/nec2c-wasm/third_party/**"
+      - "packages/nec2c-wasm/prebuilts/**"
+      - ".github/workflows/reproducibility.yml"
+  pull_request:
+    paths:
+      - "packages/nec2c-wasm/build.sh"
+      - "packages/nec2c-wasm/third_party/**"
+      - "packages/nec2c-wasm/prebuilts/**"
+  workflow_dispatch:
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Read the pinned emcc version
+        id: pin
+        run: |
+          version="$(grep -oP '^EMCC_VERSION=\K.*' packages/nec2c-wasm/build.sh)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            emsdk/upstream
+            emsdk/node
+            emsdk/downloads
+            emsdk/.emscripten
+          key: emsdk-${{ runner.os }}-${{ steps.pin.outputs.version }}
+
+      - name: Rebuild the artifacts
+        run: bash packages/nec2c-wasm/build.sh
+
+      - name: Fail if the committed artifacts moved
+        run: |
+          if ! git diff --quiet -- packages/nec2c-wasm/prebuilts; then
+            echo "Rebuilt artifacts differ from the committed ones:" >&2
+            git diff --stat -- packages/nec2c-wasm/prebuilts >&2
+            exit 1
+          fi
+          echo "Artifacts reproduce byte-for-byte with emcc $EMCC_VERSION."
+        env:
+          EMCC_VERSION: ${{ steps.pin.outputs.version }}
