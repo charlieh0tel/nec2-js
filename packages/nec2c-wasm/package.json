@@ -28,7 +28,7 @@
   },
   "scripts": {
     "build:wasm": "bash build.sh",
-    "test": "node test/smoke.mjs"
+    "test:parity": "node test/smoke.mjs"
   },
   "repository": {
     "type": "git",

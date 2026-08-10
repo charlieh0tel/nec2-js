@@ -97,8 +97,11 @@ npm run build:wasm            # installs/activates the pinned emcc, then compile
 Verify against native nec2c (Debian/Ubuntu: `apt install nec2c`):
 
 ```sh
-npm test        # numeric parity, repeatability, timing
+npm run test:parity   # numeric parity, repeatability, timing
 ```
+
+It is a separate script because it needs that external binary; the rest of the
+repo's tests do not.
 
 Note that nec2c has a fixed-size filename buffer and aborts on long paths; the
 harness keeps its temporary files short for that reason.
