@@ -209,5 +209,5 @@ console.log(
       : "Converges to perfect ground at every height: the Sommerfeld evaluation is sound over this range.",
 );
 console.log(
-  `\nNote: divergence sets in where the height approaches the segment length (${(LAMBDA / 11).toFixed(3)} m here), a geometry NEC-2 itself warns about. Running the same sweep through another NEC-2 implementation is what separates a bug in one solver from a limit of the method.`,
+  "\nNote: the breakdown is set by height in wavelengths, not by the mesh. Holding 0.02wl and varying the segment count from 3 to 81 -- a 27x range of segment lengths, spanning heights from an eighth of a segment to three of them -- leaves the error at about 91% throughout. Refining the model does not help; only lifting the antenna does.",
 );
