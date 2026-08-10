@@ -111,5 +111,11 @@ harness keeps its temporary files short for that reason.
 GPLv3-or-later. nec2c is GPLv3 and the `.mjs`/`.wasm` artifacts built from it
 carry those obligations: the corresponding source is vendored under
 `third_party/nec2c/` and ships in the published npm tarball, and `build.sh`
-reproduces the artifacts from it. Keep `LICENSE`, `third_party/nec2c/COPYING`,
-and this provenance intact when redistributing.
+reproduces the artifacts from it.
+
+The artifacts also embed Emscripten's runtime and musl-derived libc, both MIT.
+`THIRD-PARTY-NOTICES.md` carries those notices, as MIT requires; the terms are
+compatible with the GPL that governs the combination.
+
+Keep `LICENSE`, `THIRD-PARTY-NOTICES.md`, `third_party/nec2c/COPYING`, and this
+provenance intact when redistributing.

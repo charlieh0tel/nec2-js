@@ -24,6 +24,7 @@
     "third_party",
     "build.sh",
     "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
     "README.md"
   ],
   "engines": {
