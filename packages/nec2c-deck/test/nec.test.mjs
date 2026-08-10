@@ -44,8 +44,28 @@ const SAMPLE_OUTPUT = `
 `;
 
 const WIRES = [
-  { tag: 1, segments: 9, x1: 0, y1: 0, z1: 0, x2: 0, y2: 0, z2: 1, radiusM: 0.001 },
-  { tag: 2, segments: 9, x1: 0, y1: 0, z1: 0, x2: 0, y2: 1, z2: 0, radiusM: 0.001 },
+  {
+    tag: 1,
+    segments: 9,
+    x1: 0,
+    y1: 0,
+    z1: 0,
+    x2: 0,
+    y2: 0,
+    z2: 1,
+    radiusM: 0.001,
+  },
+  {
+    tag: 2,
+    segments: 9,
+    x1: 0,
+    y1: 0,
+    z1: 0,
+    x2: 0,
+    y2: 1,
+    z2: 0,
+    radiusM: 0.001,
+  },
 ];
 const GRID = { ntheta: 9, nphi: 7, theta0: 0, phi0: 0, dtheta: 10, dphi: 15 };
 
@@ -195,20 +215,30 @@ describe("buildDeck", () => {
   it("refuses non-finite and out-of-range values", () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(
-        () => buildDeck(["t"], [{ ...WIRES[0], z2: bad }], [], false, 145.9, GRID),
+        () =>
+          buildDeck(["t"], [{ ...WIRES[0], z2: bad }], [], false, 145.9, GRID),
         /must be a finite number/,
       );
     }
     // toFixed switches to exponential at 1e21, which no card reader accepts.
     assert.throws(
-      () => buildDeck(["t"], [{ ...WIRES[0], z2: 1e21 }], [], false, 145.9, GRID),
+      () =>
+        buildDeck(["t"], [{ ...WIRES[0], z2: 1e21 }], [], false, 145.9, GRID),
       /too large/,
     );
   });
 
   it("refuses a fractional tag or segment count", () => {
     assert.throws(
-      () => buildDeck(["t"], [{ ...WIRES[0], segments: 9.5 }], [], false, 145.9, GRID),
+      () =>
+        buildDeck(
+          ["t"],
+          [{ ...WIRES[0], segments: 9.5 }],
+          [],
+          false,
+          145.9,
+          GRID,
+        ),
       /non-negative integer/,
     );
   });

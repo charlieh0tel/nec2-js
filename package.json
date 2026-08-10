@@ -3,13 +3,17 @@
   "private": true,
   "description": "Workspace root for nec2c-wasm and nec2c-deck; not published.",
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "lint": "biome check packages test",
     "test": "npm run test --workspaces --if-present && npm run test:integration",
     "test:integration": "node --test test/*.test.mjs"
   },
   "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
     "typescript": "^5.7.3"
   }
 }

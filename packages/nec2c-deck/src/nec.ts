@@ -153,9 +153,7 @@ function checkFixed(x: number, field: string, smallest: number): void {
   }
   if (x !== 0 && Math.abs(x) < smallest) {
     throw new Error(
-      `${field} would be written as zero (${x}); NEC card fields carry ` +
-        `${smallest} resolution, and a zero radius or coordinate changes the ` +
-        "meaning of the card",
+      `${field} would be written as zero (${x}); NEC card fields carry ${smallest} resolution, and a zero radius or coordinate changes the meaning of the card`,
     );
   }
 }
@@ -191,8 +189,8 @@ function comment(text: string): string {
   }
   if (text.length > COMMENT_COLUMNS) {
     throw new Error(
-      `comment is ${text.length} characters; NEC reads ${COMMENT_COLUMNS}: ` +
-        JSON.stringify(text),
+      `comment is ${text.length} characters; NEC reads ` +
+        `${COMMENT_COLUMNS}: ${JSON.stringify(text)}`,
     );
   }
   return text;
@@ -316,7 +314,8 @@ function parseSources(lines: string[], start: number): SourceResult[] {
     }
     const tokens = tokenize(line);
     const t0 = tokens[0];
-    const looksLikeData = tokens.length >= 11 && t0 !== undefined && isFloat(t0);
+    const looksLikeData =
+      tokens.length >= 11 && t0 !== undefined && isFloat(t0);
     if (!looksLikeData) {
       // A row that fails to parse *inside* the block would otherwise truncate
       // the list and hand back a short but well-formed result, losing feed
@@ -378,7 +377,9 @@ function parsePattern(lines: string[], start: number): PatternPoint[] {
       // which can occur at any angle. There is no polarization to report
       // there, so say so rather than claiming a linear measurement.
       const sense =
-        t7 !== undefined && isFloat(t7) ? SENSE_UNDEFINED : (t7 ?? SENSE_UNDEFINED);
+        t7 !== undefined && isFloat(t7)
+          ? SENSE_UNDEFINED
+          : (t7 ?? SENSE_UNDEFINED);
       points.push({
         thetaDeg: finite(t0, "pattern theta"),
         phiDeg: finite(t1, "pattern phi"),
@@ -470,9 +471,7 @@ export function parseOutput(text: string): NecResult {
   for (const [title, found] of Object.entries(starts)) {
     if (found.length > 1) {
       throw new Error(
-        `nec2c output has ${found.length} ${title} sections; ` +
-          "parseOutput handles one set of results per deck. Sweep by running " +
-          "one frequency per deck.",
+        `nec2c output has ${found.length} ${title} sections; parseOutput handles one set of results per deck. Sweep by running one frequency per deck.`,
       );
     }
   }
@@ -490,6 +489,7 @@ export function parseOutput(text: string): NecResult {
     sources: sourceStart === undefined ? [] : parseSources(lines, sourceStart),
     currents:
       currentStart === undefined ? [] : parseCurrents(lines, currentStart),
-    pattern: patternStart === undefined ? [] : parsePattern(lines, patternStart),
+    pattern:
+      patternStart === undefined ? [] : parsePattern(lines, patternStart),
   };
 }

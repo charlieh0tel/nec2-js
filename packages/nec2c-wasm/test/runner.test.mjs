@@ -7,8 +7,8 @@ import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { Nec2cError, runNec } from "../src/runner.mjs";
 import { runNec as runNecInline } from "../src/runner-inline.mjs";
+import { Nec2cError, runNec } from "../src/runner.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const deck = readFileSync(join(here, "fixture.nec"), "utf8");

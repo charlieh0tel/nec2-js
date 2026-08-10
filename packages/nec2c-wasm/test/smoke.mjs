@@ -11,12 +11,12 @@
 // Requires native nec2c for the comparison (Debian/Ubuntu: apt install nec2c);
 // set NEC2C to point at it if it is not at the default path.
 
-import { runNec } from "../src/runner.mjs";
-import { readFileSync, writeFileSync, mkdtempSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runNec } from "../src/runner.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const deckPath = process.argv[2] ?? join(here, "fixture.nec");
@@ -94,7 +94,9 @@ function parseRadiation(out) {
 
 function maxRelDiff(a, b, label) {
   if (a.length !== b.length)
-    throw new Error(`${label}: column count differs ${a.length} vs ${b.length}`);
+    throw new Error(
+      `${label}: column count differs ${a.length} vs ${b.length}`,
+    );
   let worst = 0;
   for (let i = 0; i < a.length; i++) {
     const denom = Math.max(Math.abs(a[i]), Math.abs(b[i]), 1e-12);
@@ -153,7 +155,9 @@ for (const i of sample) {
 
 const worst = Math.max(ipDiff, radWorst);
 const pass = worst <= REL_TOL;
-console.log(`overall worst relDiff=${worst.toExponential(2)} tol=${REL_TOL} ${pass ? "PASS" : "FAIL"}`);
+console.log(
+  `overall worst relDiff=${worst.toExponential(2)} tol=${REL_TOL} ${pass ? "PASS" : "FAIL"}`,
+);
 
 // --- repeatability + timing ---
 let repeatOk = true;
@@ -167,7 +171,9 @@ for (let i = 0; i < RUNS; i++) {
     console.log(`repeatability FAIL at run ${i}: output differs`);
   }
 }
-console.log(`repeatability: ${RUNS} sequential wasm calls ${repeatOk ? "identical PASS" : "FAIL"}`);
+console.log(
+  `repeatability: ${RUNS} sequential wasm calls ${repeatOk ? "identical PASS" : "FAIL"}`,
+);
 
 const nativeTimes = [];
 for (let i = 0; i < RUNS; i++) {

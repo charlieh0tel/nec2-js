@@ -2,7 +2,15 @@
   "name": "nec2c-wasm",
   "version": "0.1.0",
   "description": "nec2c 1.3.1 (NEC-2 antenna modeling) compiled to WebAssembly, for Node and browsers",
-  "keywords": ["nec2c", "nec2", "wasm", "webassembly", "antenna", "electromagnetics", "ham-radio"],
+  "keywords": [
+    "nec2c",
+    "nec2",
+    "wasm",
+    "webassembly",
+    "antenna",
+    "electromagnetics",
+    "ham-radio"
+  ],
   "license": "GPL-3.0-or-later",
   "type": "module",
   "exports": {

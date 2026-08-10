@@ -5,8 +5,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Nec2cError, runNec } from "nec2c-wasm";
 import { buildDeck, parseOutput } from "nec2c-deck";
+import { Nec2cError, runNec } from "nec2c-wasm";
 
 // A 1 m vertical wire at 145.9 MHz is a touch over half a wavelength, so it
 // should land near a dipole's 73 ohm and read slightly inductive.
@@ -41,12 +41,15 @@ describe("nec2c-deck + nec2c-wasm", () => {
   });
 
   it("reports a deck nec2c cannot parse", async () => {
-    await assert.rejects(() => runNec("total garbage not a deck\n"), (e) => {
-      assert.ok(e instanceof Nec2cError);
-      assert.notEqual(e.exitCode, 0);
-      // nec2c writes its complaint to the output file, not to stderr.
-      assert.match(e.output, /ERROR/);
-      return true;
-    });
+    await assert.rejects(
+      () => runNec("total garbage not a deck\n"),
+      (e) => {
+        assert.ok(e instanceof Nec2cError);
+        assert.notEqual(e.exitCode, 0);
+        // nec2c writes its complaint to the output file, not to stderr.
+        assert.match(e.output, /ERROR/);
+        return true;
+      },
+    );
   });
 });
