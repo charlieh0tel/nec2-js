@@ -33,9 +33,26 @@ Use [`nec2c-wasm`](../nec2c-wasm), or shell out to a native `nec2c` binary.
 ## What it covers
 
 `buildDeck` emits the cards this was written for: `CM`/`CE`, `GW`, `GE`, `GN`,
-`EK`, `TL`, `EX`, `FR`, `RP`, `EN` -- one frequency, one radiation-pattern
-block, perfect ground when grounded. That is a working subset of NEC-2, not all
-of it; there is no `LD`, `GM`, `GS`, or `NT`.
+`EK`, `TL`, `EX`, `FR`, `RP`, `EN` -- one frequency and one radiation-pattern
+block. That is a working subset of NEC-2, not all of it; there is no `LD`,
+`GM`, `GS`, or `NT`.
+
+### Ground
+
+The `ground` argument takes three forms:
+
+```js
+buildDeck(comments, wires, sources, false, freqMhz, grid);  // free space
+buildDeck(comments, wires, sources, true, freqMhz, grid);   // perfect conductor
+buildDeck(comments, wires, sources, { epsR: 13, sigmaSm: 0.005 }, freqMhz, grid);
+```
+
+Constants emit a Sommerfeld/Norton `GN 2` card -- slower to solve than a
+perfect ground, and the accurate treatment for an antenna near real earth.
+`epsR` is the relative permittivity and `sigmaSm` the conductivity in siemens
+per metre; typical values are 13 and 0.005 for average ground, 5 and 0.001 for
+poor, 81 and 5 for sea water. A radial-wire screen is not offered, since NEC
+cannot combine one with this ground type.
 
 `parseOutput` reads the `ANTENNA INPUT PARAMETERS`, `CURRENTS AND LOCATION`,
 and `RADIATION PATTERNS` sections into `sources`, `currents`, and `pattern`.

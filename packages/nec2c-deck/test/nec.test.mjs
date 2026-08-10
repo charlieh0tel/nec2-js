@@ -197,6 +197,33 @@ describe("buildDeck", () => {
     assert.ok(deck.trimEnd().endsWith("EN"));
   });
 
+  it("emits a Sommerfeld GN card for real ground constants", () => {
+    const deck = buildDeck(
+      ["t"],
+      WIRES,
+      [],
+      { epsR: 13, sigmaSm: 0.005 },
+      145.9,
+      GRID,
+    );
+    // Type 2 is Sommerfeld/Norton; the 0 after it is the radial-wire count,
+    // which nec2c requires to be zero for this ground type.
+    assert.ok(deck.includes("GN 2 0 0 0 13.000000 0.005000"));
+    assert.ok(deck.includes("GE -1"));
+  });
+
+  it("refuses ground constants that are not physical", () => {
+    assert.throws(
+      () =>
+        buildDeck(["t"], WIRES, [], { epsR: 0.5, sigmaSm: 0.005 }, 145.9, GRID),
+      /cannot be below 1/,
+    );
+    assert.throws(
+      () => buildDeck(["t"], WIRES, [], { epsR: 13, sigmaSm: -1 }, 145.9, GRID),
+      /cannot be negative/,
+    );
+  });
+
   it("omits ground cards in free space", () => {
     const sources = [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }];
     const deck = buildDeck(["t"], WIRES, sources, false, 145.9, GRID);
@@ -223,6 +250,14 @@ describe("buildDeck", () => {
       () => buildDeck(["t"], tiny, [], false, 145.9, GRID),
       /would be written as zero/,
     );
+  });
+
+  it("allows a coordinate that rounds to zero", () => {
+    // A radial rotated to 90 degrees lands on 3.4e-17, which is zero in every
+    // sense that matters. Only a zero radius changes what the card means.
+    const rotated = [{ ...WIRES[0], x2: 3.3971132970020115e-17 }];
+    const deck = buildDeck(["t"], rotated, [], false, 145.9, GRID);
+    assert.ok(deck.includes("GW 1 9 0.000000 0.000000 0.000000 0.000000"));
   });
 
   it("refuses non-finite and out-of-range values", () => {

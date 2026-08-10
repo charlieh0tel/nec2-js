@@ -61,6 +61,30 @@ export interface TransmissionLine {
   lengthM: number;
 }
 
+// Electrical constants of a real ground, for a GN card.
+//   epsR: relative permittivity, dimensionless and at least 1.
+//   sigmaSm: conductivity in siemens per metre.
+// Typical values: average ground 13 and 0.005, poor 5 and 0.001, sea water
+// 81 and 5. NEC solves these with the Sommerfeld/Norton method, which is
+// slower than a perfect ground but is the accurate treatment for an antenna
+// close to real earth.
+export interface GroundConstants {
+  epsR: number;
+  sigmaSm: number;
+}
+
+// What sits beneath the antenna: nothing (free space), a perfect conductor, or
+// real ground with the constants above.
+export type Ground = boolean | GroundConstants;
+
+// GN card ground types. 1 is a perfect conductor; 2 selects Sommerfeld/Norton
+// for finite constants.
+const GN_PERFECT = 1;
+const GN_SOMMERFELD = 2;
+// Radial-wire ground screen count. Zero is required with Sommerfeld ground --
+// nec2c rejects the combination outright.
+const GN_NO_RADIALS = 0;
+
 // RP-card sampling grid over the upper hemisphere. Angles are in degrees; theta
 // is measured from zenith.
 export interface RadiationGrid {
@@ -135,43 +159,45 @@ export function feedCurrent(result: NecResult, tag: number): Complex {
 }
 
 // NEC card fields are fixed-point text, so a value has to survive being
-// written with a fixed number of decimals. Six decimals in metres is 1 um: a
-// smaller dimension would be written as 0.000000, and a zero GW radius means
-// something else entirely to NEC (a tapered wire expecting a GC card), so
-// nec2c would reject the deck with an error naming neither the wire nor the
-// field. toFixed also switches to exponential notation at 1e21, which no NEC
-// card reader accepts.
+// written with a fixed number of decimals. toFixed also switches to
+// exponential notation at 1e21, which no NEC card reader accepts.
+//
+// Rounding to zero only matters where zero changes what the card means, which
+// is the GW radius: NEC reads a zero radius as a tapered wire expecting a GC
+// card, and nec2c then rejects the deck with an error naming neither the wire
+// nor the field. Coordinates are not held to that rule -- a wire endpoint at
+// the origin or on an axis is ordinary, and a rotated one lands on values like
+// 3.4e-17 that are zero in every sense that matters.
 const F6_SMALLEST = 1e-6;
 const FIXED_NOTATION_LIMIT = 1e21;
 
-function checkFixed(x: number, field: string, smallest: number): void {
+function checkFixed(x: number, field: string): void {
   if (!Number.isFinite(x)) {
     throw new Error(`${field} must be a finite number, got ${x}`);
   }
   if (Math.abs(x) >= FIXED_NOTATION_LIMIT) {
     throw new Error(`${field} is too large to write as a NEC card field: ${x}`);
   }
-  if (x !== 0 && Math.abs(x) < smallest) {
-    throw new Error(
-      `${field} would be written as zero (${x}); NEC card fields carry ${smallest} resolution, and a zero radius or coordinate changes the meaning of the card`,
-    );
-  }
 }
 
-function f6(x: number, field: string): string {
-  checkFixed(x, field, F6_SMALLEST);
+// For the GW radius, where a value that rounds away changes the card's meaning.
+function f6nonzero(x: number, field: string): string {
+  checkFixed(x, field);
+  if (x === 0 || Math.abs(x) < F6_SMALLEST) {
+    throw new Error(
+      `${field} would be written as zero (${x}); NEC card fields carry ${F6_SMALLEST} resolution, and a zero radius means a tapered wire`,
+    );
+  }
   return x.toFixed(6);
 }
 
 function f3any(x: number, field: string): string {
-  checkFixed(x, field, 0);
+  checkFixed(x, field);
   return x.toFixed(3);
 }
 
-// For fields where rounding to zero is harmless because zero is a normal
-// value, not a change of meaning.
 function f6any(x: number, field: string): string {
-  checkFixed(x, field, 0);
+  checkFixed(x, field);
   return x.toFixed(6);
 }
 
@@ -205,12 +231,32 @@ function checkIndex(x: number, field: string): number {
   return x;
 }
 
+// GN card for finite ground. The trailing integer fields are the radial-wire
+// count and two unused type codes; the floats are the constants themselves.
+function groundCard(ground: GroundConstants): string {
+  if (!(ground.epsR >= 1)) {
+    throw new Error(
+      `ground epsR is a relative permittivity and cannot be below 1, got ${ground.epsR}`,
+    );
+  }
+  if (!(ground.sigmaSm >= 0)) {
+    throw new Error(
+      `ground sigmaSm is a conductivity and cannot be negative, got ${ground.sigmaSm}`,
+    );
+  }
+  return (
+    `GN ${GN_SOMMERFELD} ${GN_NO_RADIALS} 0 0 ` +
+    `${f6any(ground.epsR, "ground epsR")} ` +
+    `${f6any(ground.sigmaSm, "ground sigmaSm")}`
+  );
+}
+
 // Render a complete NEC-2 deck as text.
 export function buildDeck(
   commentLines: string[],
   wires: Wire[],
   sources: Source[],
-  ground: boolean,
+  ground: Ground,
   freqMhz: number,
   grid: RadiationGrid,
   transmissionLines: TransmissionLine[] = [],
@@ -222,17 +268,21 @@ export function buildDeck(
     lines.push(
       `GW ${checkIndex(w.tag, "wire tag")} ` +
         `${checkIndex(w.segments, at("segment count"))} ` +
-        `${f6(w.x1, at("x1"))} ${f6(w.y1, at("y1"))} ${f6(w.z1, at("z1"))} ` +
-        `${f6(w.x2, at("x2"))} ${f6(w.y2, at("y2"))} ${f6(w.z2, at("z2"))} ` +
-        `${f6(w.radiusM, at("radius"))}`,
+        `${f6any(w.x1, at("x1"))} ${f6any(w.y1, at("y1"))} ${f6any(w.z1, at("z1"))} ` +
+        `${f6any(w.x2, at("x2"))} ${f6any(w.y2, at("y2"))} ${f6any(w.z2, at("z2"))} ` +
+        `${f6nonzero(w.radiusM, at("radius"))}`,
     );
   }
-  // GE flag -1: ground present but no wires connect to it (loops float above the
-  // reflector); 0: free space.
-  lines.push(`GE ${ground ? -1 : 0}`);
-  if (ground) {
-    // Perfect conducting ground plane approximates a solid metal reflector.
-    lines.push("GN 1");
+  // GE flag -1: ground present but no wires connect to it (the antenna floats
+  // above it); 0: free space.
+  const grounded = ground !== false;
+  lines.push(`GE ${grounded ? -1 : 0}`);
+  if (ground === true) {
+    // Perfect conducting ground plane, which also approximates a solid metal
+    // reflector.
+    lines.push(`GN ${GN_PERFECT}`);
+  } else if (ground !== false) {
+    lines.push(groundCard(ground));
   }
   lines.push("EK");
   for (const t of transmissionLines) {
@@ -242,7 +292,7 @@ export function buildDeck(
         `${checkIndex(t.tag2, "line tag2")} ` +
         `${checkIndex(t.segment2, "line segment2")} ` +
         // A negative Z0 is meaningful here: it models a crossed connection.
-        `${f6(t.z0Ohm, "line impedance")} ${f6(t.lengthM, "line length")}`,
+        `${f6any(t.z0Ohm, "line impedance")} ${f6nonzero(t.lengthM, "line length")}`,
     );
   }
   for (const s of sources) {
@@ -255,7 +305,7 @@ export function buildDeck(
         `${f6any(s.vImag, "source voltage (imaginary)")}`,
     );
   }
-  lines.push(`FR 0 1 0 0 ${f6(freqMhz, "frequency")} 0`);
+  lines.push(`FR 0 1 0 0 ${f6nonzero(freqMhz, "frequency")} 0`);
   lines.push(
     `RP 0 ${checkIndex(grid.ntheta, "grid ntheta")} ` +
       `${checkIndex(grid.nphi, "grid nphi")} ${RP_OPTION_CODE} ` +
