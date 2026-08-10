@@ -70,6 +70,19 @@ rather than to stderr, so `e.output` is usually where the explanation is;
 `e.stdout` and `e.stderr` are frequently both empty on a failed run. The error
 also carries `e.deck`, so a failure can be diagnosed without re-running it.
 
+### Known issue: Sommerfeld ground close to earth
+
+nec2c's `GN 2` ground does not converge to a perfect ground plane as
+conductivity goes to infinity when the antenna is within about 0.05 wavelengths
+of the surface -- a limit it must satisfy, since a lossy half-space becomes a
+perfect conductor there. The error reaches +91.9% at 0.02 wavelengths and grows
+below that. A ground-mounted vertical, the obvious reason to want finite
+ground, sits in exactly that regime.
+
+`investigations/sommerfeld.mjs` at the repo root measures it, and takes another
+solver's command to compare. Whether this is nec2c's bug or a limit of the
+NEC-2 method is not yet settled; see `TODO.md`.
+
 ### Performance
 
 A fresh WebAssembly instance is created per call. nec2c keeps extensive
