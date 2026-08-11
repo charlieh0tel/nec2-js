@@ -119,9 +119,13 @@ resistance, and the value at 0.02wl:
 | solver | what it is | worst | at 0.02wl |
 |---|---|---|---|
 | nec2c 1.3.1 | C translation, `somnec.c` | +46594% | +91.90% |
+| nec2c tip of tree | the same, current upstream | -- | +91.88% |
 | aegnec2 0.9.0 | C, with the original `somnec.f` linked in | +46597% | +91.92% |
 | nec2++ 2.3.4 | C++ rewrite | +126% | +0.77% |
 | nec2dxs | the original Fortran NEC-2D | segfault | segfault |
+
+Current nec2c matches the vendored 1.3.1 to five digits on this case, so the
+version this repo ships is not behind upstream on it.
 
 - [x] Settled: this is NEC-2's behaviour, not a defect nec2c introduced.
       aegnec2 calls the *original Fortran* SOMNEC and reproduces nec2c's
