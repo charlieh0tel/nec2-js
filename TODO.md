@@ -185,6 +185,25 @@ right about real soil.
 - [x] `nec2c-wasm`'s README carries the caveat, since a ground-mounted
       vertical -- the obvious use for finite ground -- sits in that regime.
 
+### The nec2c line_buf overflow, and the patch we carry for it
+
+`load_line()` terminates with `buff[num_chr]`, and `num_chr` reaches
+`LINE_LEN`, so a `char[LINE_LEN]` buffer is always one byte short.
+`patches/0001-line-buf-off-by-one.patch` widens it; `build.sh` applies
+everything in `patches/` to a staged copy, so the submodule stays pristine.
+
+- [x] Reported upstream, <https://github.com/KJ7LNW/nec2c/issues/2>. The
+      maintainer has accepted the fix; not merged or released as of writing.
+- [x] Reported to Debian against `nec2c` 1.3.1-3, which ships a pre-`3d8c230`
+      tarball and so has the 52-byte form rather than the one-byte one. Debian
+      has not picked up v1.3.2 or v1.3.3 either, so an upstream merge alone
+      will not reach it.
+- [ ] **Drop the patch once upstream tags a release carrying the fix**: delete
+      `packages/nec2c-wasm/patches/0001-line-buf-off-by-one.patch`, move the
+      submodule pin to that tag, rebuild the prebuilts. This is the one item
+      here with an expiry -- left alone, `build.sh` will keep applying a patch
+      that upstream has already made, and the `patch` call will start failing.
+
 ### Package naming
 
 - [x] Repo renamed `nec2c-js` -> `nec2-js`. It is no longer about one solver:
