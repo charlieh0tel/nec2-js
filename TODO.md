@@ -191,15 +191,16 @@ right about real soil.
       the investigations run four, and the deck writer emits standard NEC-2
       that any of them reads. GitHub redirects the old URL and npm names are
       independent, so nothing published moved.
-- [ ] Rename `nec2c-deck`. Its two halves have different scope -- `buildDeck`
-      emits standard NEC-2 and is wanted for nec2++'s text mode, while the
-      parsers are keyed to nec2c's exact column layout and transfer to nothing.
-      The nec2c-specific name fits only the parser half. Options: rename the
-      whole package and keep the split internal, or split it into a
-      solver-agnostic writer and an nec2c parser package. Either way it is a
-      published-package rename, so it needs the deliberate path -- publish
-      under the new name, deprecate the old with a pointer to it -- rather than
-      being folded into another change.
+- [x] Decided: `nec2c-deck` keeps its name and stays specific to nec2c. An
+      earlier note here planned to rename it `nec2-deck` and split the deck
+      writer out as solver-agnostic, so both engines could share one model.
+      That was for cross-engine use, which is not wanted. `nec2pp-wasm` needs
+      nothing from it -- its own model, and numbers straight from nec2++ --
+      so the package is exactly what its name says: nec2c's deck writer and
+      nec2c's parsers.
+- [ ] The one thing that could reopen this is `toDeck()` in `nec2pp-wasm`. If
+      that lands there would be two deck writers in the repo, which argues for
+      sharing a writer at that point -- not for renaming anything now.
 
 ### nec2++
 
