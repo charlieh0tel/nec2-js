@@ -1,4 +1,4 @@
-# nec2c-js
+# nec2-js
 
 NEC-2 antenna modeling for JavaScript, in two independent pieces:
 

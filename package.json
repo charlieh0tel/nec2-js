@@ -1,5 +1,5 @@
 {
-  "name": "nec2c-js-workspace",
+  "name": "nec2-js-workspace",
   "private": true,
   "description": "Workspace root for nec2c-wasm and nec2c-deck; not published.",
   "type": "module",
