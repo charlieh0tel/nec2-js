@@ -16,8 +16,8 @@
       "packages/nec2c-deck/dist/**",
       "packages/nec2c-wasm/prebuilts/**",
       "packages/nec2c-wasm/third_party/**",
-      "packages/nec2pp-wasm/prebuilts/**",
-      "packages/nec2pp-wasm/third_party/**",
+      "packages/necpp-wasm/prebuilts/**",
+      "packages/necpp-wasm/third_party/**",
       "emsdk/**"
     ]
   }

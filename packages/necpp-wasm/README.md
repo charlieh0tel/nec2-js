@@ -1,4 +1,4 @@
-# nec2pp-wasm
+# necpp-wasm
 
 [nec2++](https://github.com/tmolteno/necpp) -- Tim Molteno's C++ rewrite of
 NEC-2 -- compiled to a WebAssembly ES module that runs in Node (>= 20) and
@@ -14,7 +14,7 @@ The `.wasm` is prebuilt and committed, so installing needs no Emscripten.
 ## Usage
 
 ```js
-import { solve } from "nec2pp-wasm";
+import { solve } from "necpp-wasm";
 
 const result = await solve({
   wires: [{ tag: 1, segments: 9, from: [0, 0, 0], to: [0, 0, 1], radiusM: 0.001 }],
@@ -43,7 +43,7 @@ describe, then solve, then read -- and is what you want when a model is
 assembled conditionally or solved more than once:
 
 ```js
-import { createContext } from "nec2pp-wasm";
+import { createContext } from "necpp-wasm";
 
 const nec = await createContext();
 try {

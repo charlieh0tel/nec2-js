@@ -36,7 +36,7 @@ const model = (overrides) => ({
   ...overrides,
 });
 
-describe("nec2pp-wasm", () => {
+describe("necpp-wasm", () => {
   it("agrees with nec2c on a dipole feedpoint", async () => {
     const solve = await createSolver();
     const feed = solve(model()).feeds[0];

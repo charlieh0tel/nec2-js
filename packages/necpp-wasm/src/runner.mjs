@@ -12,7 +12,7 @@
 // values are {re, im}, points are [x, y, z] in metres, angles are degrees,
 // and anything selecting a mode is a string rather than an integer code.
 
-import createNec2pp from "../prebuilts/nec2pp.mjs";
+import createNecpp from "../prebuilts/necpp.mjs";
 
 export { createContext, createSolver, solve, POLARIZATION_SENSE };
 
@@ -59,7 +59,7 @@ let modulePromise;
 
 function loadModule(options) {
   if (modulePromise === undefined) {
-    modulePromise = createNec2pp(options);
+    modulePromise = createNecpp(options);
   }
   return modulePromise;
 }
@@ -68,7 +68,7 @@ function loadModule(options) {
  * Load nec2++ and open a context to describe a structure in.
  *
  * @param {{locateFile?: (path: string) => string}} [options] Emscripten
- *   options; `locateFile` points at nec2pp.wasm when it does not sit beside
+ *   options; `locateFile` points at necpp.wasm when it does not sit beside
  *   the glue module.
  * @returns {Promise<NecContext>} An open context. Call dispose() when done.
  */

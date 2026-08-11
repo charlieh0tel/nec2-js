@@ -4,8 +4,8 @@
 #
 # Compiles the nec2++ submodule (third_party/necpp) together with the embind
 # facade in src/binding.cpp, and emits:
-#   prebuilts/nec2pp.mjs        + prebuilts/nec2pp.wasm   (separate .wasm)
-#   prebuilts/nec2pp-inline.mjs                           (.wasm embedded)
+#   prebuilts/necpp.mjs        + prebuilts/necpp.wasm   (separate .wasm)
+#   prebuilts/necpp-inline.mjs                           (.wasm embedded)
 #
 # Upstream's own CMake wasm target is deliberately not used. It builds a stub
 # wrapper that reads stdin, and it omits -fexceptions, without which nothing it
@@ -109,19 +109,19 @@ common_flags=(
   --bind
   -sMODULARIZE=1
   -sEXPORT_ES6=1
-  -sEXPORT_NAME=createNec2pp
+  -sEXPORT_NAME=createNecpp
   -sALLOW_MEMORY_GROWTH=1
   -sENVIRONMENT=web,node
 )
 
-emcc "${common_flags[@]}" "${srcpaths[@]}" -o "$outdir/nec2pp.mjs"
+emcc "${common_flags[@]}" "${srcpaths[@]}" -o "$outdir/necpp.mjs"
 
 # SINGLE_FILE embeds the wasm as base64 in the glue, for bundlers that will not
 # emit or serve a sibling .wasm.
-emcc "${common_flags[@]}" -sSINGLE_FILE=1 "${srcpaths[@]}" -o "$outdir/nec2pp-inline.mjs"
+emcc "${common_flags[@]}" -sSINGLE_FILE=1 "${srcpaths[@]}" -o "$outdir/necpp-inline.mjs"
 
 # emcc marks the .wasm executable; it is data, and the committed mode is 0644.
-chmod 644 "$outdir/nec2pp.wasm"
+chmod 644 "$outdir/necpp.wasm"
 
 echo "built nec2++ $necpp_version with emcc $EMCC_VERSION:"
-ls -l "$outdir/nec2pp.mjs" "$outdir/nec2pp.wasm" "$outdir/nec2pp-inline.mjs"
+ls -l "$outdir/necpp.mjs" "$outdir/necpp.wasm" "$outdir/necpp-inline.mjs"
