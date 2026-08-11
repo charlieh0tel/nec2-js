@@ -14,30 +14,65 @@ The `.wasm` is prebuilt and committed, so installing needs no Emscripten.
 ## Usage
 
 ```js
-import { createSolver } from "nec2pp-wasm";
+import { solve } from "nec2pp-wasm";
 
-const solve = await createSolver();
-const result = solve({
-  wires: [
-    { tag: 1, segments: 9, x1: 0, y1: 0, z1: 0, x2: 0, y2: 0, z2: 1, radiusM: 0.001 },
-  ],
-  sources: [{ tag: 1, segment: 5, vReal: 1, vImag: 0 }],
+const result = await solve({
+  wires: [{ tag: 1, segments: 9, from: [0, 0, 0], to: [0, 0, 1], radiusM: 0.001 }],
+  sources: [{ kind: "voltage", tag: 1, segment: 5, volts: { re: 1, im: 0 } }],
   ground: false,
   freqMhz: 145.9,
   grid: { ntheta: 3, nphi: 2, theta0: 0, phi0: 0, dtheta: 45, dphi: 90, average: 1 },
 });
 
-result.sources[0].zReal;        // 75.2571
+result.feeds[0].impedance;      // { re: 75.2571, im: 16.9006 }
+result.feeds[0].current;        // { re, im }, and .voltage, .powerW
 result.pattern[2].totalGainDb;  // 2.13 at theta 90
 result.pattern[2].sense;        // "LINEAR"
-result.currents.length;         // 9
+result.gain.maxDb;              // and minDb, meanDb, sdDb
 result.averagePowerGain;        // 0.97
 ```
 
-The model is the same shape `nec2c-deck`'s `buildDeck` takes -- `wires`,
-`transforms`, `sources`, `loads`, `transmissionLines`, `ground`,
-`groundConnected`, `freqMhz`, `grid` -- so one description drives either
-engine.
+Complex values are `{re, im}`, points are `[x, y, z]` in metres, angles are
+degrees, and anything selecting a mode is a string rather than an integer
+code.
+
+### Building a structure step by step
+
+`solve()` is a convenience over a context, which mirrors nec2++'s own shape --
+describe, then solve, then read -- and is what you want when a model is
+assembled conditionally or solved more than once:
+
+```js
+import { createContext } from "nec2pp-wasm";
+
+const nec = await createContext();
+try {
+  nec.wire({ tag: 1, segments: 9, from: [0, 0, 0], to: [0, 0, 1], radiusM: 1e-3 })
+     .transform({ rotZDeg: 45, copies: 7, tagIncrement: 1 })
+     .finishGeometry({ ground: { epsR: 13, sigmaSm: 0.005 } })
+     .frequency(145.9)
+     .excite({ kind: "voltage", tag: 1, segment: 5, volts: { re: 1 } })
+     .load({ kind: "conductivity", tag: 0, sigmaSm: 5.8e7 });
+  const result = nec.solvePattern({ ntheta: 19, nphi: 4, dtheta: 5, dphi: 90 });
+} finally {
+  nec.dispose();
+}
+```
+
+`dispose()` is not optional: a bound object holds a wasm heap pointer, so
+dropping the JS reference leaks what it points at. The context also implements
+`Symbol.dispose`, so `using` works where it is supported.
+
+### What can be described
+
+Geometry: `wire`, `arc`, `helix`, `transform` (GM), `reflect` (GX).
+Environment: `finishGeometry` (GE/GN, including radial screens),
+`frequency`, `interactionDistance` (KH), `extendedThinWireKernel` (EK).
+Excitation: applied voltage, current-slope discontinuity, an elementary
+current source, and incident plane waves -- linear or either circular sense,
+which is how a receiving antenna or a radar cross section is modelled.
+Loading: `load` in all six NEC forms. Networks: `transmissionLine` and the
+general two-port `network` (NT).
 
 ## What you get that a parsed deck cannot give you
 
@@ -49,8 +84,15 @@ engine.
 - **Per-direction polarization** -- `axialRatio`, `tiltDeg` and `sense` on
   every pattern point, not only at the peak.
 - **Per-segment currents** with tag, segment, centre coordinates and length.
+- **Feed current, voltage and power**, not just impedance. These come from
+  nec2++'s antenna-input result rather than its C API, which has only the
+  impedance.
 - **No parser fragility.** `nec2c-deck`'s parsers are keyed to nec2c's exact
   column layout; there are no columns here.
+
+Writing a deck out from the same description is not implemented; it would be
+useful for feeding other NEC tools, and the model carries everything a deck
+needs.
 
 ### The grid's option digits
 

@@ -19,6 +19,7 @@
 #include "nec_context.h"
 #include "nec_exception.h"
 #include "nec_radiation_pattern.h"
+#include "nec_results.h"
 #include "nec_structure_currents.h"
 
 namespace {
@@ -34,6 +35,28 @@ struct PatternPoint {
   double eThetaPhaseDeg;
   double ePhiMagnitude;
   double ePhiPhaseDeg;
+};
+
+// One driven segment, as nec2++ reports it after a solve. Impedance is what
+// the feed sees; current and voltage are what flows and is applied there.
+struct Feed {
+  int tag;
+  int segment;
+  double zReal;
+  double zImag;
+  double iReal;
+  double iImag;
+  double vReal;
+  double vImag;
+  double powerW;
+};
+
+// Aggregate gain statistics over the sampled pattern, in dB.
+struct GainStats {
+  double maxDb;
+  double minDb;
+  double meanDb;
+  double sdDb;
 };
 
 // One segment's current. Coordinates are the segment centre, metres.
@@ -61,6 +84,13 @@ struct SegmentCurrent {
   } catch (int code) {                                      \
     throw std::runtime_error("nec2++ aborted with code " +  \
                              std::to_string(code));         \
+  } catch (const std::exception& e) {                       \
+    throw std::runtime_error(e.what());                     \
+  } catch (...) {                                           \
+    /* Anything left would otherwise reach JavaScript as a  \
+       bare CppException with only a heap pointer in it. */ \
+    throw std::runtime_error(                               \
+        "nec2++ threw an unrecognised exception");          \
   }
 
 class Nec {
@@ -87,6 +117,30 @@ class Nec {
                              fromTag, copies, tagIncrement);)
   }
 
+  // Angles are degrees; radiusM is the arc's radius, wireRadiusM the
+  // conductor's.
+  void arc(int tag, int segments, double radiusM, double angle1Deg,
+           double angle2Deg, double wireRadiusM) {
+    NEC_GUARD(m_context.arc(tag, segments, radiusM, angle1Deg, angle2Deg,
+                            wireRadiusM);)
+  }
+
+  // A helix: turn spacing and total length, then the two radii at each end
+  // (a1/b1 at the bottom, a2/b2 at the top) which let it be elliptical or
+  // tapered. A negative length makes it left-hand wound.
+  void helix(int tag, int segments, double turnSpacingM, double lengthM,
+             double a1, double b1, double a2, double b2,
+             double wireRadiusM) {
+    NEC_GUARD(m_context.helix(tag, segments, turnSpacingM, lengthM, a1, b1, a2,
+                              b2, wireRadiusM);)
+  }
+
+  // GX: reflect the structure through the coordinate planes. The digits of
+  // planes select x, y and z; tagIncrement offsets the copies' tags.
+  void reflect(int tagIncrement, int planes) {
+    NEC_GUARD(m_context.gx_card(tagIncrement, planes);)
+  }
+
   // gpflag: 0 free space, 1 ground plane with wires bonded to it, -1 ground
   // present but nothing touching it.
   void geometryComplete(int gpflag) {
@@ -105,9 +159,54 @@ class Nec {
     NEC_GUARD(m_context.fr_card(0, 1, freqMhz, 0.0);)
   }
 
-  void excitationVoltage(int tag, int segment, double vReal, double vImag) {
-    NEC_GUARD(m_context.ex_card(EXCITATION_VOLTAGE, tag, segment, 0, vReal,
-                                vImag, 0.0, 0.0, 0.0, 0.0);)
+  // An applied-voltage source on one segment. kind selects EXCITATION_VOLTAGE
+  // or EXCITATION_VOLTAGE_DISC (the current-slope-discontinuity form).
+  void excitationVoltage(int kind, int tag, int segment, double vReal,
+                         double vImag) {
+    NEC_GUARD(m_context.ex_card(static_cast<excitation_type>(kind), tag,
+                                segment, 0, vReal, vImag, 0.0, 0.0, 0.0, 0.0);)
+  }
+
+  // An elementary current source at a point in space, rather than on a
+  // segment: position in metres, orientation as the angle down from z and the
+  // azimuth, and the current moment.
+  void excitationCurrent(double x, double y, double z, double alphaDeg,
+                         double betaDeg, double moment) {
+    NEC_GUARD(m_context.ex_card(EXCITATION_CURRENT, 0, 0, 0, x, y, z, alphaDeg,
+                                betaDeg, moment);)
+  }
+
+  // An incident plane wave, which is how a receiving antenna or a radar cross
+  // section is modelled. kind selects linear or either circular sense; the
+  // angles sweep the arrival direction, and ratio is the axial ratio for the
+  // elliptical case.
+  void excitationPlaneWave(int kind, int nTheta, int nPhi, double thetaDeg,
+                           double phiDeg, double etaDeg, double dThetaDeg,
+                           double dPhiDeg, double ratio) {
+    NEC_GUARD(m_context.ex_card(static_cast<excitation_type>(kind), nTheta,
+                                nPhi, 0, thetaDeg, phiDeg, etaDeg, dThetaDeg,
+                                dPhiDeg, ratio);)
+  }
+
+  // A two-port network between segments: the general form that a transmission
+  // line is one case of. The six values are the admittance matrix entries.
+  void network(int tag1, int segment1, int tag2, int segment2, double y11r,
+               double y11i, double y12r, double y12i, double y22r,
+               double y22i) {
+    NEC_GUARD(m_context.nt_card(tag1, segment1, tag2, segment2, y11r, y11i,
+                                y12r, y12i, y22r, y22i);)
+  }
+
+  // Below this separation, in wavelengths, NEC uses its cheaper interaction
+  // approximation. The standard accuracy-for-speed knob on large structures.
+  void interactionDistance(double wavelengths) {
+    NEC_GUARD(m_context.kh_card(wavelengths);)
+  }
+
+  // The extended thin-wire kernel, for wires thick relative to their segment
+  // length.
+  void extendedThinWireKernel(bool enabled) {
+    NEC_GUARD(m_context.set_extended_thin_wire_kernel(enabled);)
   }
 
   void loadCard(int type, int tag, int fromSegment, int toSegment, double f1,
@@ -142,8 +241,57 @@ class Nec {
     return m_context.get_impedance_imag(0, feedIndex);
   }
 
-  double gainMax() { return m_context.get_gain_max(0); }
-  double gainMean() { return m_context.get_gain_mean(0); }
+  GainStats gain() {
+    return {m_context.get_gain_max(0), m_context.get_gain_min(0),
+            m_context.get_gain_mean(0), m_context.get_gain_sd(0)};
+  }
+
+  GainStats gainRhcp() {
+    return {m_context.get_gain_rhcp_max(0), m_context.get_gain_rhcp_min(0),
+            m_context.get_gain_rhcp_mean(0), m_context.get_gain_rhcp_sd(0)};
+  }
+
+  GainStats gainLhcp() {
+    return {m_context.get_gain_lhcp_max(0), m_context.get_gain_lhcp_min(0),
+            m_context.get_gain_lhcp_mean(0), m_context.get_gain_lhcp_sd(0)};
+  }
+
+  // What each driven segment saw: impedance, the current that flowed, the
+  // voltage applied and the power delivered.
+  //
+  // This is nec_antenna_input, not nec_structure_excitation. The latter is
+  // built only inside netwk_compute_currents, so it exists only when the
+  // model has an NT or TL network; antenna_input is the ordinary path and is
+  // the one that always carries the feed data.
+  std::vector<Feed> feeds() {
+    nec_antenna_input* input = m_context.get_input_parameters(0);
+    if (input == nullptr) {
+      return {};
+    }
+    std::vector<int> tag = input->get_tag();
+    std::vector<int> segment = input->get_segment();
+    std::vector<nec_complex> current = input->get_current();
+    std::vector<nec_complex> voltage = input->get_voltage();
+    std::vector<nec_complex> impedance = input->get_impedance();
+    std::vector<nec_float> power = input->get_power();
+
+    std::vector<Feed> out;
+    out.reserve(tag.size());
+    for (size_t i = 0; i < tag.size(); i++) {
+      Feed f;
+      f.tag = tag[i];
+      f.segment = i < segment.size() ? segment[i] : 0;
+      f.iReal = i < current.size() ? real(current[i]) : 0.0;
+      f.iImag = i < current.size() ? imag(current[i]) : 0.0;
+      f.vReal = i < voltage.size() ? real(voltage[i]) : 0.0;
+      f.vImag = i < voltage.size() ? imag(voltage[i]) : 0.0;
+      f.zReal = i < impedance.size() ? real(impedance[i]) : 0.0;
+      f.zImag = i < impedance.size() ? imag(impedance[i]) : 0.0;
+      f.powerW = i < power.size() ? power[i] : 0.0;
+      out.push_back(f);
+    }
+    return out;
+  }
 
   // The honest efficiency figure over lossy ground, where a power budget
   // computed as input-minus-losses counts what the earth absorbs as radiated.
@@ -244,25 +392,53 @@ EMSCRIPTEN_BINDINGS(nec2pp) {
       .field("iReal", &SegmentCurrent::iReal)
       .field("iImag", &SegmentCurrent::iImag);
 
+  emscripten::value_object<Feed>("Feed")
+      .field("tag", &Feed::tag)
+      .field("segment", &Feed::segment)
+      .field("zReal", &Feed::zReal)
+      .field("zImag", &Feed::zImag)
+      .field("iReal", &Feed::iReal)
+      .field("iImag", &Feed::iImag)
+      .field("vReal", &Feed::vReal)
+      .field("vImag", &Feed::vImag)
+      .field("powerW", &Feed::powerW);
+
+  emscripten::value_object<GainStats>("GainStats")
+      .field("maxDb", &GainStats::maxDb)
+      .field("minDb", &GainStats::minDb)
+      .field("meanDb", &GainStats::meanDb)
+      .field("sdDb", &GainStats::sdDb);
+
   emscripten::register_vector<PatternPoint>("PatternPointVector");
   emscripten::register_vector<SegmentCurrent>("SegmentCurrentVector");
+  emscripten::register_vector<Feed>("FeedVector");
 
   emscripten::class_<Nec>("Nec")
       .constructor<>()
       .function("wire", &Nec::wire)
+      .function("arc", &Nec::arc)
+      .function("helix", &Nec::helix)
+      .function("reflect", &Nec::reflect)
       .function("transform", &Nec::transform)
       .function("geometryComplete", &Nec::geometryComplete)
       .function("groundCard", &Nec::groundCard)
       .function("frequency", &Nec::frequency)
       .function("excitationVoltage", &Nec::excitationVoltage)
+      .function("excitationCurrent", &Nec::excitationCurrent)
+      .function("excitationPlaneWave", &Nec::excitationPlaneWave)
       .function("loadCard", &Nec::loadCard)
       .function("transmissionLine", &Nec::transmissionLine)
+      .function("network", &Nec::network)
+      .function("interactionDistance", &Nec::interactionDistance)
+      .function("extendedThinWireKernel", &Nec::extendedThinWireKernel)
       .function("radiationPattern", &Nec::radiationPattern)
       .function("impedanceReal", &Nec::impedanceReal)
       .function("impedanceImag", &Nec::impedanceImag)
-      .function("gainMax", &Nec::gainMax)
-      .function("gainMean", &Nec::gainMean)
+      .function("gain", &Nec::gain)
+      .function("gainRhcp", &Nec::gainRhcp)
+      .function("gainLhcp", &Nec::gainLhcp)
       .function("averagePowerGain", &Nec::averagePowerGain)
+      .function("feeds", &Nec::feeds)
       .function("pattern", &Nec::pattern)
       .function("currents", &Nec::currents);
 }
