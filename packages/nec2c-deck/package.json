@@ -36,8 +36,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/charlieh0tel/nec2c-js.git",
+    "url": "git+https://github.com/charlieh0tel/nec2-js.git",
     "directory": "packages/nec2c-deck"
   },
-  "homepage": "https://github.com/charlieh0tel/nec2c-js/tree/main/packages/nec2c-deck"
+  "homepage": "https://github.com/charlieh0tel/nec2-js/tree/main/packages/nec2c-deck"
 }
