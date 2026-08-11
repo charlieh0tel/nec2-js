@@ -1,0 +1,46 @@
+{
+  "name": "nec2pp-wasm",
+  "version": "0.1.0",
+  "description": "nec2++ (NEC-2 antenna modeling) compiled to WebAssembly, driven through its C++ API rather than card decks",
+  "keywords": [
+    "nec2++",
+    "necpp",
+    "nec2",
+    "wasm",
+    "webassembly",
+    "antenna",
+    "electromagnetics",
+    "ham-radio"
+  ],
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/runner.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./src/runner.mjs",
+  "files": [
+    "src",
+    "prebuilts",
+    "third_party",
+    "build.sh",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build:wasm": "./build.sh",
+    "test": "node --test test/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/charlieh0tel/nec2-js.git",
+    "directory": "packages/nec2pp-wasm"
+  },
+  "homepage": "https://github.com/charlieh0tel/nec2-js/tree/main/packages/nec2pp-wasm"
+}

@@ -7,3 +7,6 @@ emsdk/node/
 emsdk/downloads/
 emsdk/.emscripten*
 *~
+
+# Generated config.h for the nec2++ build.
+packages/nec2pp-wasm/build/
