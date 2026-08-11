@@ -262,3 +262,26 @@ right about real soil.
         version pin and a README that says which rules apply where.
 - [ ] There is no published npm package for nec2++ -- `necpp` and `nec2pp` are
       both 404 on the registry. Whatever we ship would be the first.
+
+### Deck output from a nec2pp-wasm model
+
+Wanted, but secondary: `nec2pp-wasm` drives nec2++ through its API and never
+needs a deck, so this is for feeding a model to other NEC tools, for checking
+one by eye, and for filing a reproducible case upstream.
+
+- [ ] Add `toDeck(model)`. The model already carries everything a deck needs
+      and the mapping is mechanical: `wire`/`arc`/`helix` to `GW`/`GA`/`GH`,
+      `transform`/`reflect` to `GM`/`GX`, `finishGeometry` plus ground to
+      `GE`/`GN`, `excite` to `EX`, `load` to `LD`, `transmissionLine`/`network`
+      to `TL`/`NT`, and the `solvePattern` grid to `RP`. It is a pure function
+      of the model, so it needs no wasm and is testable by string comparison.
+- [ ] Lift the fixed-format encoding rules from `nec2c-deck` rather than
+      rediscovering them: six-decimal fields, a radius that must not round to
+      zero (NEC reads zero as a tapered wire wanting a `GC`), and `E` notation
+      for `LD` values, where 5 pF written fixed becomes a flat zero and NEC
+      reads that as "omit the capacitor". The packages stay separate, but that
+      knowledge was expensive and should not be learned twice.
+- [ ] Decide the dialect: standard NEC-2 cards that any implementation reads,
+      or nec2++'s own accepted set, which is wider than nec2c's.
+- [ ] Decide whether reading a deck back into a model is in scope. Emitting is
+      easy; parsing is a different job.
