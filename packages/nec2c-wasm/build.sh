@@ -2,7 +2,7 @@
 #
 # Build nec2c as a WebAssembly ES module.
 #
-# Compiles the vendored nec2c 1.3.1 C sources (third_party/nec2c) with emcc and
+# Compiles the nec2c submodule (third_party/nec2c) with emcc and
 # emits the committed prebuilt artifacts:
 #   prebuilts/nec2c.mjs         + prebuilts/nec2c.wasm   (separate .wasm)
 #   prebuilts/nec2c-inline.mjs                           (.wasm embedded)

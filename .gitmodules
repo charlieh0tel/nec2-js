@@ -5,3 +5,6 @@
 	path = packages/nec2pp-wasm/third_party/necpp
 	url = https://github.com/tmolteno/necpp.git
 	branch = master
+[submodule "packages/nec2c-wasm/third_party/nec2c"]
+	path = packages/nec2c-wasm/third_party/nec2c
+	url = https://github.com/KJ7LNW/nec2c
