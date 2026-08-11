@@ -185,6 +185,22 @@ right about real soil.
 - [x] `nec2c-wasm`'s README carries the caveat, since a ground-mounted
       vertical -- the obvious use for finite ground -- sits in that regime.
 
+### Package naming
+
+- [x] Repo renamed `nec2c-js` -> `nec2-js`. It is no longer about one solver:
+      the investigations run four, and the deck writer emits standard NEC-2
+      that any of them reads. GitHub redirects the old URL and npm names are
+      independent, so nothing published moved.
+- [ ] Rename `nec2c-deck`. Its two halves have different scope -- `buildDeck`
+      emits standard NEC-2 and is wanted for nec2++'s text mode, while the
+      parsers are keyed to nec2c's exact column layout and transfer to nothing.
+      The nec2c-specific name fits only the parser half. Options: rename the
+      whole package and keep the split internal, or split it into a
+      solver-agnostic writer and an nec2c parser package. Either way it is a
+      published-package rename, so it needs the deliberate path -- publish
+      under the new name, deprecate the old with a pointer to it -- rather than
+      being folded into another change.
+
 ### nec2++
 
 - [x] Licence checked, and it is not a blocker. `COPYING` in
@@ -193,22 +209,55 @@ right about real soil.
       option) any later version" -- GPL-2-**or-later**, which is compatible
       with this repo's GPL-3-or-later. An earlier note here said GPL-2-only and
       called it incompatible; that was wrong.
-- [ ] Package nec2++ as a third package? What it offers over nec2c:
-      - A real API. `libnecpp.h` exposes `nec_create`/`nec_delete` contexts,
-        per-card calls (`nec_wire`, `nec_gm_card`, `nec_gx_card`, `nec_gn_card`,
-        `nec_fr_card`, `nec_rp_card`, `nec_excitation_voltage`/`_current`/
-        `_planewave`) and structured getters (`nec_gain`, `nec_gain_max`,
-        `nec_gain_mean`, `nec_impedance_real`/`_imag`). Reading numbers instead
-        of parsing columns removes the fragility this package's parsers carry
-        and the entire "one set of results per call" restriction.
-      - Cards this package cannot write yet come free: `GX`, patches
-        (`SP`/`SC`), plane-wave excitation.
-      - Maintained, C++17, CMake, no external dependencies (Eigen is bundled
-        and header-only, so the Emscripten story should be straightforward).
-      - It also ships a `necpp` executable that reads card decks from a file,
-        so a text-in/text-out mode alongside the API is possible.
-      Against: a larger `.wasm` than nec2c's 259 KB; a second solver to keep
-      honest against the first; and `nec2c-deck`'s parsers would not apply to
-      it, since they are keyed to nec2c's exact column layout. `buildDeck`
-      would, being standard NEC-2 -- so the deck writer is reusable even if the
-      parsers are not.
+- [x] Emscripten build proven. nec2++ HEAD compiles under this repo's own
+      pinned emcc 6.0.3 (`emcmake cmake -DNECPP_BUILD_WASM=ON`), no Docker
+      needed despite upstream's `scripts/build_wasm_docker.sh` pinning emsdk
+      4.0.7. The `libnecpp.h` C API binds through `ccall`, and the seven-wire
+      example returns bit-identical numbers in all three builds:
+
+      | build | Z (ohm) | gain max |
+      |---|---|---|
+      | native, necpp 2.3.4 | 595.415366 - j354.438287 | 6.328267 dB |
+      | native, HEAD | 595.415366 - j354.438287 | 6.328267 dB |
+      | wasm, HEAD | 595.415366 - j354.438287 | 6.328267 dB |
+
+- [x] **`-fexceptions` is mandatory, at compile time and not only at link.**
+      nec2++ throws `int` as ordinary control flow -- `nec_context.cpp`:
+      `throw 1; // Continue card input` unwinds to the card-input loop once a
+      single-frequency solve finishes. Objects compiled without exception
+      support drop the matching `catch`, so the throw escapes the module and
+      every solve looks like a crash. This cost most of a day: the symptom is
+      `nec_rp_card` "failing" while every other call returns 0, which reads
+      like a bad argument list rather than a build flag.
+- [ ] Upstream's `NECPP_BUILD_WASM` target does not set `-fexceptions`, so
+      nothing built by it can complete a solve. That is a one-line CMake fix
+      and a genuine bug worth sending up. It also explains why the wasm
+      wrapper below was never caught: no build of it could have got far enough
+      to notice.
+- [ ] `src/nec_wasm.cpp` is a stub, not a wrapper. `nec_process_input(ctx,
+      input_text)` ignores `input_text` and calls `parse_geometry(&ctx,
+      stdin)`, under the comment "For now, this is a stub showing the API
+      shape". Built and run, it aborts. The text-in/text-out mode it advertises
+      does not exist yet; wiring it to a string is real feature work, not a
+      patch, and is better landed upstream than carried.
+- [ ] `example/test_nec.c` does not compile against the shipped
+      `libnecpp.h`: it calls `nec_geometry_complete(nec, 1, 0)` where the
+      header declares `(nec_context*, int)`. Two call sites. Trivial PR, and
+      good first contact with upstream.
+- [ ] Package it as `nec2pp-wasm`, exposing **both** the C API and a text
+      mode. The C API is the reason to want it -- structured getters remove
+      the column-layout fragility and the one-set-of-results-per-call
+      restriction in one go -- while text mode keeps the deck writer useful
+      against both solvers. Cards this repo cannot write yet come free over
+      the API: `GX`, patches (`SP`/`SC`), plane-wave excitation.
+      Costs, now measured rather than guessed:
+      - 549336 bytes of `.wasm` with exceptions on, against nec2c's 258665.
+        About 2.1x. An earlier note here put it near parity, from a build of
+        the stub that linked almost nothing.
+      - A second solver to keep honest against the first.
+      - A vendoring model this repo does not have yet. `nec2c-wasm` pins a
+        frozen Debian tarball by checksum and vendors it unmodified; necpp is
+        a live git upstream shipping releases weekly, so it needs a deliberate
+        version pin and a README that says which rules apply where.
+- [ ] There is no published npm package for nec2++ -- `necpp` and `nec2pp` are
+      both 404 on the registry. Whatever we ship would be the first.
