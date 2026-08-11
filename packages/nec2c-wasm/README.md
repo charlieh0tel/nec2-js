@@ -70,31 +70,36 @@ rather than to stderr, so `e.output` is usually where the explanation is;
 `e.stdout` and `e.stderr` are frequently both empty on a failed run. The error
 also carries `e.deck`, so a failure can be diagnosed without re-running it.
 
-### Known issue: Sommerfeld ground close to earth
+### Known issue: `GN 2` ground below about 0.05 wavelengths
 
-nec2c's `GN 2` ground does not converge to a perfect ground plane as
-conductivity goes to infinity when the antenna is within about 0.05 wavelengths
-of the surface -- a limit it must satisfy, since a lossy half-space becomes a
-perfect conductor there. The error reaches +91.9% at 0.02 wavelengths and grows
-below that. A ground-mounted vertical, the obvious reason to want finite
-ground, sits in exactly that regime.
+Within roughly 0.05 wavelengths of the surface, `GN 2` results are not
+trustworthy. Above that height it meets every check made of it here, so this is
+a bad regime rather than a bad ground model -- but a ground-mounted vertical,
+the obvious reason to want finite ground, sits squarely inside it.
 
-Refining the mesh does not rescue it: the error holds at about 91% across a
-27x range of segment lengths. Only height does.
+Two independent measurements, each against a closed-form answer:
 
-The radiated field goes wrong there too. Average power gain over the upper
-hemisphere should be exactly 2 for a lossless antenna over a perfect
-conductor; at 0.01 wavelengths with a ground conductive enough to be one,
-nec2c reports 42.8. Take this as a bench observation rather than an expert
-assessment of the method: it says the engine stops conserving energy in this
-regime, not why.
+- **The conducting limit.** As conductivity rises a lossy half-space becomes a
+  perfect conductor, so `GN 2` must approach `GN 1`. Below 0.05 wavelengths it
+  does not: the feedpoint resistance is +91.9% out at 0.02 wavelengths, and
+  worse lower down. Refining the mesh does not help -- the error holds across a
+  27x range of segment lengths. Only height does.
+- **Energy.** Average power gain over the upper hemisphere is exactly 2 for a
+  lossless antenna over a perfect conductor. At 0.01 wavelengths, over a ground
+  conductive enough to be one, nec2c reports 42.8.
 
 This is NEC-2's behaviour rather than something nec2c introduced: aegnec2,
 which links the original Fortran SOMNEC, reproduces these numbers to three
-digits, and the original Fortran NEC-2D segfaults in the same regime. nec2++
-does markedly better there. `investigations/sommerfeld.mjs` at the repo root
-measures it and takes another solver's command to compare; `TODO.md` has the
-figures.
+digits; a tip-of-tree nec2c matches the vendored 1.3.1; and the original
+Fortran NEC-2D segfaults in the same regime. nec2++ pushes the floor down about
+five-fold, to roughly 0.01 wavelengths, and then fails the same way below that.
+
+Take all of this as a bench observation from one geometry, not an expert
+assessment of the method: it says where these engines stop meeting limits they
+should meet, not why, and not that any of them is right about real soil.
+`investigations/sommerfeld.mjs` and `investigations/average-power-gain.mjs` at
+the repo root make the measurements and take another solver's command to
+compare; `TODO.md` has the figures.
 
 ### Performance
 
