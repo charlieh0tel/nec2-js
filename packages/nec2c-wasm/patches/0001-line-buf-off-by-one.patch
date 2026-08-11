@@ -1,0 +1,44 @@
+Fix a one-byte stack overflow when a card line fills the buffer.
+
+load_line() (misc.c) fills a caller's buffer with
+
+    while( num_chr < LINE_LEN )
+      buff[num_chr++] = (char)chr;
+
+and then terminates it with
+
+    buff[num_chr] = '\0';
+
+When the line is at least LINE_LEN characters long the loop leaves num_chr
+equal to LINE_LEN, so the terminator is written at buff[LINE_LEN] -- one past
+the end of a buffer declared char[LINE_LEN].
+
+Confirmed with AddressSanitizer against v1.3.2, reading a deck whose second CM
+card is 140 characters:
+
+    ERROR: AddressSanitizer: stack-buffer-overflow
+      #0 load_line misc.c:172
+      #1 main      main.c:285
+    [2160, 2292) 'line_buf' <== Memory access at offset 2292 overflows this
+
+It does not usually crash: main()'s infile[81] and otfile[81] sit next to
+line_buf, so the stray byte lands in one of those rather than on the canary.
+
+Giving the buffer one more byte is the smaller change, and keeps load_line's
+contract ("fills up to LINE_LEN characters, then terminates") intact for every
+other caller. Fixing it in load_line instead would silently shorten every
+line it reads.
+
+Reported upstream; carried here until it is released.
+
+--- a/main.c
++++ b/main.c
+@@ -38,7 +38,7 @@
+ int main( int argc, char **argv )
+ {
+   char infile[81] = "", otfile[81] = "";
+-  char ain[3], line_buf[LINE_LEN];
++  char ain[3], line_buf[LINE_LEN+1];
+
+ /* input card mnemonic list */
+ #define NUM_CMNDS  20
