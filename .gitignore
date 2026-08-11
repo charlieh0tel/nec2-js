@@ -10,3 +10,6 @@ emsdk/.emscripten*
 
 # Generated config.h for the nec2++ build.
 packages/nec2pp-wasm/build/
+
+# Staged, patched sources for the nec2c build.
+packages/nec2c-wasm/build/

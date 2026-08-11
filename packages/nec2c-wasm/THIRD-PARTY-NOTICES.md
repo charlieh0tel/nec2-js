@@ -9,7 +9,8 @@ in `LICENSE`.
 
 The solver itself. Neoklis Kyriazis (5B4AZ), <https://www.qsl.net/5b4az/>.
 
-The corresponding source is vendored in `third_party/nec2c/` and ships with
+The corresponding source is the `third_party/nec2c` submodule, pinned to an
+exact commit and shipped with
 this package; `build.sh` reproduces the artifacts from it. See
 `third_party/nec2c/COPYING` for the license text and the package README for
 provenance.
