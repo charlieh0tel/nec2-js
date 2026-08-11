@@ -200,9 +200,16 @@ everything in `patches/` to a staged copy, so the submodule stays pristine.
       will not reach it.
 - [ ] **Drop the patch once upstream tags a release carrying the fix**: delete
       `packages/nec2c-wasm/patches/0001-line-buf-off-by-one.patch`, move the
-      submodule pin to that tag, rebuild the prebuilts. This is the one item
-      here with an expiry -- left alone, `build.sh` will keep applying a patch
-      that upstream has already made, and the `patch` call will start failing.
+      submodule pin to that tag, rebuild the prebuilts.
+
+      Nothing decays if this is left alone: the pin is fixed, so the build
+      keeps producing the same bytes indefinitely. What happens is that
+      whoever next bumps the pin past the fix gets a build failure --
+      `patch` exits 1 with "Reversed (or previously applied) patch detected"
+      and `build.sh` runs under `set -e`. That is the intended behaviour
+      rather than a hazard: it stops at the moment the patch becomes
+      redundant, instead of silently double-patching or silently skipping.
+      This note is here so the failure is recognised for what it is.
 
 ### Package naming
 
