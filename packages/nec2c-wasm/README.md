@@ -131,14 +131,35 @@ They were not quite, and the difference mattered.
 That tree declares `char line_buf[81]` in `main()`, while `nec2c.h` defines
 `LINE_LEN` as 132 and `misc.c`'s `load_line()` fills a caller's buffer with
 `while (num_chr < LINE_LEN)`. **A deck line longer than 81 characters
-overflowed that stack buffer.** A comment card is 80 columns plus its `CM `,
-so ordinary input could reach it -- no malice required. Upstream fixed it
-before `v1.3.1` was tagged (`3d8c230`, "Fixed coverity scan issue"), and the
-fix is in `v1.3.2`.
+overflowed that stack buffer by up to 52 bytes**, confirmed under
+AddressSanitizer:
 
-The exposure was limited: each run gets a fresh WebAssembly instance, so a
-corrupted stack could not outlive the call or reach the host. It was still
-memory corruption on reachable input, and it is gone.
+```
+ERROR: AddressSanitizer: stack-buffer-overflow
+  #0 load_line  misc.c:154
+  #1 main       main.c:269
+[1920, 2001) 'line_buf' (line 41) <== Memory access at offset 2001 overflows this
+```
+
+It does not usually crash, which is why it went unnoticed: `main()`'s
+`infile[81]` and `otfile[81]` sit next to `line_buf`, so the stray bytes land
+in those rather than on the stack canary.
+
+Upstream widened the buffer to `LINE_LEN` in `3d8c230` before tagging
+`v1.3.1`. **That reduced the overflow but did not remove it.** `load_line()`
+terminates with `buff[num_chr]`, and `num_chr` equals `LINE_LEN` once the line
+fills the buffer, so `char[LINE_LEN]` is still one byte short -- ASan reports
+the same finding against `v1.3.2` at offset 2292 of a `[2160, 2292)` buffer.
+
+`patches/0001-line-buf-off-by-one.patch` gives the buffer one more byte, and
+`build.sh` applies it to a staged copy so the submodule checkout stays
+pristine. With it, ASan is clean and an over-long line is rejected rather than
+corrupting the stack. Reported upstream; drop the patch once the pin moves
+past a release that carries the fix.
+
+The exposure here was always bounded -- each run gets a fresh WebAssembly
+instance, so a corrupted stack cannot outlive the call or reach the host --
+but it was memory corruption on ordinary input.
 
 ## Build
 

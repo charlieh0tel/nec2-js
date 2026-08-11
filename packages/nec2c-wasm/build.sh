@@ -63,18 +63,38 @@ sources=(
   somnec.c
 )
 
+# The sources are staged into a build directory and patched there, so the
+# submodule checkout stays pristine: `git status` in it never reports a change,
+# and bumping the pin is an ordinary checkout.
+stage="$here/build/src"
+rm -rf "$stage"
+mkdir -p "$stage"
+cp "$vendor"/*.c "$vendor"/*.h "$stage/"
+
+# Patches carried against the pinned commit. Each is fixed upstream or reported
+# there; drop it once the pin moves past it.
+shopt -s nullglob
+for patch in "$here"/patches/*.patch; do
+  echo "applying $(basename "$patch")"
+  patch -s -p1 -d "$stage" < "$patch"
+done
+shopt -u nullglob
+
 srcpaths=()
 for s in "${sources[@]}"; do
-  srcpaths+=("$vendor/$s")
+  srcpaths+=("$stage/$s")
 done
+
+necpp_version="$(grep -oE 'AC_INIT\(\[?nec2c\]?, *\[?[0-9.]+' "$vendor/configure.ac" 2>/dev/null | grep -oE '[0-9]+\.[0-9.]+' | head -1)"
+necpp_version="${necpp_version:-1.3.2}"
 
 # PACKAGE_STRING is the only autoconf/config.h macro referenced by the code
 # (main.c, printed by -v). We supply it directly rather than generating
 # config.h so the build needs no ./configure step.
 common_flags=(
   -O2
-  -DPACKAGE_STRING='"nec2c 1.3.1"'
-  -I"$vendor"
+  -DPACKAGE_STRING="\"nec2c $necpp_version\""
+  -I"$stage"
   -sMODULARIZE=1
   -sEXPORT_ES6=1
   -sEXPORT_NAME=createNec2c
