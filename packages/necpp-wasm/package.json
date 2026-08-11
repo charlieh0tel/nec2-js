@@ -1,5 +1,5 @@
 {
-  "name": "nec2pp-wasm",
+  "name": "necpp-wasm",
   "version": "0.1.0",
   "description": "nec2++ (NEC-2 antenna modeling) compiled to WebAssembly, driven through its C++ API rather than card decks",
   "keywords": [
@@ -40,7 +40,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/charlieh0tel/nec2-js.git",
-    "directory": "packages/nec2pp-wasm"
+    "directory": "packages/necpp-wasm"
   },
-  "homepage": "https://github.com/charlieh0tel/nec2-js/tree/main/packages/nec2pp-wasm"
+  "homepage": "https://github.com/charlieh0tel/nec2-js/tree/main/packages/necpp-wasm"
 }

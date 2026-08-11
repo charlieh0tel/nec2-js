@@ -194,11 +194,11 @@ right about real soil.
 - [x] Decided: `nec2c-deck` keeps its name and stays specific to nec2c. An
       earlier note here planned to rename it `nec2-deck` and split the deck
       writer out as solver-agnostic, so both engines could share one model.
-      That was for cross-engine use, which is not wanted. `nec2pp-wasm` needs
+      That was for cross-engine use, which is not wanted. `necpp-wasm` needs
       nothing from it -- its own model, and numbers straight from nec2++ --
       so the package is exactly what its name says: nec2c's deck writer and
       nec2c's parsers.
-- [ ] The one thing that could reopen this is `toDeck()` in `nec2pp-wasm`. If
+- [ ] The one thing that could reopen this is `toDeck()` in `necpp-wasm`. If
       that lands there would be two deck writers in the repo, which argues for
       sharing a writer at that point -- not for renaming anything now.
 
@@ -245,7 +245,7 @@ right about real soil.
       `libnecpp.h`: it calls `nec_geometry_complete(nec, 1, 0)` where the
       header declares `(nec_context*, int)`. Two call sites. Trivial PR, and
       good first contact with upstream.
-- [ ] Package it as `nec2pp-wasm`, exposing **both** the C API and a text
+- [ ] Package it as `necpp-wasm`, exposing **both** the C API and a text
       mode. The C API is the reason to want it -- structured getters remove
       the column-layout fragility and the one-set-of-results-per-call
       restriction in one go -- while text mode keeps the deck writer useful
@@ -260,12 +260,12 @@ right about real soil.
         frozen Debian tarball by checksum and vendors it unmodified; necpp is
         a live git upstream shipping releases weekly, so it needs a deliberate
         version pin and a README that says which rules apply where.
-- [ ] There is no published npm package for nec2++ -- `necpp` and `nec2pp` are
-      both 404 on the registry. Whatever we ship would be the first.
+- [x] Published as `necpp-wasm`, the first nec2++ package on npm: `necpp` and
+      `nec2pp` were both 404 on the registry beforehand.
 
-### Deck output from a nec2pp-wasm model
+### Deck output from a necpp-wasm model
 
-Wanted, but secondary: `nec2pp-wasm` drives nec2++ through its API and never
+Wanted, but secondary: `necpp-wasm` drives nec2++ through its API and never
 needs a deck, so this is for feeding a model to other NEC tools, for checking
 one by eye, and for filing a reproducible case upstream.
 
