@@ -82,6 +82,13 @@ ground, sits in exactly that regime.
 Refining the mesh does not rescue it: the error holds at about 91% across a
 27x range of segment lengths. Only height does.
 
+The radiated field goes wrong there too. Average power gain over the upper
+hemisphere should be exactly 2 for a lossless antenna over a perfect
+conductor; at 0.01 wavelengths with a ground conductive enough to be one,
+nec2c reports 42.8. Take this as a bench observation rather than an expert
+assessment of the method: it says the engine stops conserving energy in this
+regime, not why.
+
 This is NEC-2's behaviour rather than something nec2c introduced: aegnec2,
 which links the original Fortran SOMNEC, reproduces these numbers to three
 digits, and the original Fortran NEC-2D segfaults in the same regime. nec2++
