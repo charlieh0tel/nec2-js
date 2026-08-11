@@ -2,7 +2,7 @@
 	path = emsdk
 	url = https://github.com/emscripten-core/emsdk.git
 [submodule "packages/nec2pp-wasm/third_party/necpp"]
-	path = packages/nec2pp-wasm/third_party/necpp
+	path = packages/necpp-wasm/third_party/necpp
 	url = https://github.com/tmolteno/necpp.git
 	branch = master
 [submodule "packages/nec2c-wasm/third_party/nec2c"]
