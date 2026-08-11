@@ -127,6 +127,36 @@ resistance, and the value at 0.02wl:
 Current nec2c matches the vendored 1.3.1 to five digits on this case, so the
 version this repo ships is not behind upstream on it.
 
+`investigations/average-power-gain.mjs` asks the same regime a different
+question, and one with a closed-form answer that needs no second solver: a
+lossless antenna over a perfect conductor puts all its power into the upper
+hemisphere, so the average power gain over 2 pi steradians is exactly 2. NEC
+integrates that from the far field, so it is independent of the feedpoint
+impedance the sweep above measures. (NEC's own POWER BUDGET cannot be used --
+it reports radiated power as input minus losses, so it balances by
+construction.)
+
+Average power gain with sigma = 1e10, where the ground should absorb nothing:
+
+| height | nec2c | nec2++ |
+|---|---|---|
+| 0.002wl | 0.005 | 0.886 |
+| 0.01wl | **42.8** | 2.009 |
+| 0.02wl | 1.043 | 1.980 |
+| 0.05wl and up | 1.995 | 1.995 |
+
+The perfect-ground column of that script stays at about 1.995 throughout, so
+0.25 percent is the angular grid's own error and the floor for reading any of
+this. On that scale nec2c is far outside anything the discretization explains
+below 0.05wl -- 42.8 would be radiating twenty times the power supplied -- and
+nec2++ holds to about 0.01wl before going the same way at 0.002wl.
+
+Both therefore fail near enough to the ground; they differ in where. Worth
+stating plainly that this is a bench observation from one geometry by people
+who are not experts in the method: it says these engines stop conserving
+energy in this regime, not why, and not that any particular one of them is
+right about real soil.
+
 - [x] Settled: this is NEC-2's behaviour, not a defect nec2c introduced.
       aegnec2 calls the *original Fortran* SOMNEC and reproduces nec2c's
       numbers to three digits, so nec2c's C translation is faithful. The
