@@ -1,6 +1,6 @@
 {
   "name": "nec2c-deck",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Build NEC-2 input decks and parse nec2c output. No dependencies, no solver.",
   "keywords": [
     "nec2c",
