@@ -67,9 +67,10 @@ roughly in the order it would be worth adding.
 `parseOutput` reads `ANTENNA INPUT PARAMETERS`, `CURRENTS AND LOCATION`,
 `RADIATION PATTERNS` and `POWER BUDGET`.
 
-- [ ] Average power gain -- the `RP` card's `A` digit. This is the honest
-      efficiency figure over a lossy ground, where the power budget reads high
-      because the earth's absorbed share counts as radiated.
+- [x] Average power gain -- the `RP` card's `A` digit. The honest efficiency
+      figure over lossy ground, where the power budget reads high because the
+      earth's absorbed share counts as radiated. Parsed into
+      `averagePowerGain` as `{gain, solidAngleOverPi}`.
 - [ ] `STRUCTURE IMPEDANCE LOADING` -- echoes back what each `LD` card did.
 - [ ] Network and transmission-line port data.
 - [ ] `SEGMENTATION DATA` -- would let a caller check its own segmentation
