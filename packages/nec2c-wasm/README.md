@@ -97,9 +97,9 @@ five-fold, to roughly 0.01 wavelengths, and then fails the same way below that.
 Take all of this as a bench observation from one geometry, not an expert
 assessment of the method: it says where these engines stop meeting limits they
 should meet, not why, and not that any of them is right about real soil.
-`investigations/sommerfeld.mjs` and `investigations/average-power-gain.mjs` at
-the repo root make the measurements and take another solver's command to
-compare; `TODO.md` has the figures.
+`TODO.md` has the figures. `test/average-power-gain.test.mjs` keeps the
+energy check as a test, at heights where the method is sound -- it asserts
+what must be true rather than pinning what is currently wrong.
 
 ### Performance
 

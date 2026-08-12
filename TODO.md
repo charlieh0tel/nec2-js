@@ -105,13 +105,19 @@ discriminant is a small price. B is tempting for being non-breaking, but
 ordering encoded across two arrays is the kind of thing that passes review and
 then bites.
 
-### nec2c's Sommerfeld ground looks wrong close to earth
+### NEC-2's Sommerfeld ground fails close to earth
 
-`investigations/sommerfeld.mjs` measures the one thing about a finite ground
-that needs no judgement: as conductivity goes to infinity a lossy half-space
-becomes a perfect conductor, so `GN 2` must converge to the `GN 1` answer for
-the same geometry. Run it with no arguments for the bundled wasm nec2c, or pass
-a solver command to compare another implementation.
+Settled and closed. Kept as a record of what the solvers this repo ships can
+be trusted to do, not as an open question.
+
+The measurement needs no judgement: as conductivity goes to infinity a lossy
+half-space becomes a perfect conductor, so `GN 2` must converge to the `GN 1`
+answer for the same geometry. The harness that swept several engines lived in
+`investigations/` and has been removed -- it needed binaries that cannot be
+redistributed, ran in no workflow, and duplicated a fuller sweep kept with
+those binaries. What survives here is
+`test/average-power-gain.test.mjs`, which checks the closed-form limit against
+this repo's own two wasm builds, in CI, at heights where the method is sound.
 
 Every implementation converges exactly at and above 0.05 wavelengths of height.
 Below that, all four fail, but not alike. Worst error in the feedpoint
@@ -128,7 +134,7 @@ resistance, and the value at 0.02wl:
 Current nec2c matches the vendored 1.3.1 to five digits on this case, so the
 version this repo ships is not behind upstream on it.
 
-`investigations/average-power-gain.mjs` asks the same regime a different
+Average power gain asks the same regime a different
 question, and one with a closed-form answer that needs no second solver: a
 lossless antenna over a perfect conductor puts all its power into the upper
 hemisphere, so the average power gain over 2 pi steradians is exactly 2. NEC
