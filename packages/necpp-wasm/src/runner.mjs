@@ -8,9 +8,14 @@
 // model is built up conditionally or solved more than once. solve() is the
 // one-shot convenience over it.
 //
-// Conventions throughout, which nec2++'s C++ API does not share: complex
-// values are {re, im}, points are [x, y, z] in metres, angles are degrees,
-// and anything selecting a mode is a string rather than an integer code.
+// The shape follows nec2++'s own: the same calls in the same order, the same
+// units, and results as it reports them. What this adds is JavaScript idiom
+// rather than a different model -- complex values are {re, im}, points are
+// [x, y, z], and a mode is a string rather than an integer code.
+//
+// Units follow nec2++ too, and they are not uniform: geometry is declared in
+// metres, but results come back in wavelengths, because that is what it
+// solves in. Anything carrying a unit says which one in its name.
 
 import createNecpp from "../prebuilts/necpp.mjs";
 
@@ -74,7 +79,67 @@ function loadModule(options) {
  */
 async function createContext(options = {}) {
   const module = await loadModule(options);
-  return new NecContext(new module.Nec());
+  return new NecContext(withJsErrors(module, new module.Nec()));
+}
+
+// embind reports a C++ throw as a CppException holding a heap pointer and
+// nothing else -- no message, and not an Error, so it does not print usefully
+// and cannot be matched on. The binding already converts nec2++'s exceptions
+// into std::runtime_error with a message; this recovers that message on the
+// way out and raises a real Error, in one place rather than at every call
+// site.
+function withJsErrors(module, nec) {
+  return new Proxy(nec, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function") {
+        return value;
+      }
+      return (...args) => {
+        try {
+          return value.apply(target, args);
+        } catch (thrown) {
+          throw asError(module, thrown);
+        }
+      };
+    },
+  });
+}
+
+function asError(module, thrown) {
+  if (thrown instanceof Error) {
+    // A WebAssembly trap is not recoverable: the instance's memory is in an
+    // unknown state and every later call on it is suspect. nec2++ reaches one
+    // on input it does not validate -- a tag or segment that does not exist
+    // walks off an array rather than being rejected -- so this is reachable
+    // from an ordinary mistake, not just from abuse.
+    //
+    // The module is shared by every context in the process, so one bad model
+    // would otherwise break all later solves. Dropping it means the next
+    // createContext() builds a fresh instance.
+    if (thrown instanceof WebAssembly.RuntimeError) {
+      modulePromise = undefined;
+      const cause =
+        "This usually means a tag or segment that does not exist was " +
+        "referenced; nec2++ does not range-check those. The module has been " +
+        "discarded and the next context will get a fresh one.";
+      return new Error(`nec2++ trapped (${thrown.message}). ${cause}`, {
+        cause: thrown,
+      });
+    }
+    return thrown;
+  }
+  const pointer = thrown?.excPtr;
+  if (pointer === undefined) {
+    return new Error(`nec2++ threw ${String(thrown)}`);
+  }
+  // getExceptionMessage returns [type, message]; the message is what the
+  // binding's guard put there.
+  const described = module.getExceptionMessage?.(pointer);
+  const message = Array.isArray(described)
+    ? (described[1] ?? described[0])
+    : described;
+  return new Error(message ? String(message) : "nec2++ threw an exception");
 }
 
 /**
@@ -104,7 +169,7 @@ async function createSolver(options = {}) {
   // plain synchronous solve behind.
   const module = await loadModule(options);
   return (model) => {
-    const nec = new NecContext(new module.Nec());
+    const nec = new NecContext(withJsErrors(module, new module.Nec()));
     try {
       return nec.solveModel(model);
     } finally {
@@ -573,11 +638,15 @@ class NecContext {
       };
     });
 
+    // Reported as nec2++ reports them: it solves in wavelengths, so segment
+    // centres and lengths come back that way rather than in the metres the
+    // geometry was declared in. The names say so, because the mismatch is
+    // otherwise invisible and produces plausible-looking wrong numbers.
     const currents = drain(this.#nec.currents(), (c) => ({
       tag: c.tag,
       segment: c.segment,
-      at: [c.x, c.y, c.z],
-      lengthM: c.lengthM,
+      atWavelengths: [c.x, c.y, c.z],
+      lengthWavelengths: c.lengthM,
       current: { re: c.iReal, im: c.iImag },
     }));
 

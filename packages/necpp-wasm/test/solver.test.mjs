@@ -112,7 +112,7 @@ describe("necpp-wasm", () => {
     const feed = result.currents[4];
     assert.equal(feed.tag, 1);
     assert.equal(feed.segment, 5);
-    assert.equal(feed.at.length, 3);
+    assert.equal(feed.atWavelengths.length, 3);
     // The feed segment carries the most current on a centre-fed dipole.
     const magnitudes = result.currents.map((c) =>
       Math.hypot(c.current.re, c.current.im),
