@@ -103,6 +103,13 @@ common_flags=(
   -std=c++17
   -O2
   -fexceptions
+  # Eigen's assertions embed __FILE__, so without this the artifact carries
+  # the absolute path it was built from and only reproduces on that machine.
+  # Remapping to a relative prefix makes the build path-independent while
+  # keeping the assertions -- they are what turns nec2++'s unchecked tag and
+  # segment references into a trap rather than silent corruption.
+  "-ffile-prefix-map=$here="
+  "-ffile-prefix-map=$vendor=necpp"
   -I"$vendor/src"
   -I"$gendir"
   -isystem "$vendor/src/eigen"
