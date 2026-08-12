@@ -16,6 +16,15 @@ import createNecpp from "../prebuilts/necpp.mjs";
 
 export { createContext, createSolver, solve, POLARIZATION_SENSE };
 
+// Speed of light as MHz*m, for turning a frequency into a wavelength.
+//
+// nec2++ derives its own c from 1/sqrt(mu0*eps0) with its rounded constants
+// rather than using the defined value, so converting its wavelength-based
+// geometry back to metres with this is accurate to about one part in 1e5.
+// That is far below any modelling accuracy, but it means a coordinate does
+// not round-trip to the exact metre value it was given.
+const LIGHT_MHZ_M = 299.792458;
+
 // nec2++'s polarization_sense enum, in its own order. The fourth is what it
 // reports where both field components are ~0 and no sense means anything --
 // a pattern null.
@@ -74,7 +83,67 @@ function loadModule(options) {
  */
 async function createContext(options = {}) {
   const module = await loadModule(options);
-  return new NecContext(new module.Nec());
+  return new NecContext(withJsErrors(module, new module.Nec()));
+}
+
+// embind reports a C++ throw as a CppException holding a heap pointer and
+// nothing else -- no message, and not an Error, so it does not print usefully
+// and cannot be matched on. The binding already converts nec2++'s exceptions
+// into std::runtime_error with a message; this recovers that message on the
+// way out and raises a real Error, in one place rather than at every call
+// site.
+function withJsErrors(module, nec) {
+  return new Proxy(nec, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function") {
+        return value;
+      }
+      return (...args) => {
+        try {
+          return value.apply(target, args);
+        } catch (thrown) {
+          throw asError(module, thrown);
+        }
+      };
+    },
+  });
+}
+
+function asError(module, thrown) {
+  if (thrown instanceof Error) {
+    // A WebAssembly trap is not recoverable: the instance's memory is in an
+    // unknown state and every later call on it is suspect. nec2++ reaches one
+    // on input it does not validate -- a tag or segment that does not exist
+    // walks off an array rather than being rejected -- so this is reachable
+    // from an ordinary mistake, not just from abuse.
+    //
+    // The module is shared by every context in the process, so one bad model
+    // would otherwise break all later solves. Dropping it means the next
+    // createContext() builds a fresh instance.
+    if (thrown instanceof WebAssembly.RuntimeError) {
+      modulePromise = undefined;
+      return new Error(
+        `nec2++ trapped (${thrown.message}). This usually means a tag or ` +
+          "segment that does not exist was referenced; nec2++ does not " +
+          "range-check those. The module has been discarded and the next " +
+          "context will get a fresh one.",
+        { cause: thrown },
+      );
+    }
+    return thrown;
+  }
+  const pointer = thrown?.excPtr;
+  if (pointer === undefined) {
+    return new Error(`nec2++ threw ${String(thrown)}`);
+  }
+  // getExceptionMessage returns [type, message]; the message is what the
+  // binding's guard put there.
+  const described = module.getExceptionMessage?.(pointer);
+  const message = Array.isArray(described)
+    ? (described[1] ?? described[0])
+    : described;
+  return new Error(message ? String(message) : "nec2++ threw an exception");
 }
 
 /**
@@ -104,7 +173,7 @@ async function createSolver(options = {}) {
   // plain synchronous solve behind.
   const module = await loadModule(options);
   return (model) => {
-    const nec = new NecContext(new module.Nec());
+    const nec = new NecContext(withJsErrors(module, new module.Nec()));
     try {
       return nec.solveModel(model);
     } finally {
@@ -120,6 +189,9 @@ async function createSolver(options = {}) {
 // actually runs the solve. Reading a result before that throws.
 class NecContext {
   #nec;
+  // The frequency last given to frequency(), needed to convert nec2++'s
+  // wavelength-based geometry back to metres.
+  #freqMhz = 0;
 
   constructor(nec) {
     this.#nec = nec;
@@ -304,6 +376,9 @@ class NecContext {
   frequency(freqMhz) {
     this.#assertOpen();
     this.#nec.frequency(freqMhz);
+    // Kept because nec2++ reports segment geometry in wavelengths; converting
+    // those back to metres needs the frequency they were solved at.
+    this.#freqMhz = freqMhz;
     return this;
   }
 
@@ -573,11 +648,15 @@ class NecContext {
       };
     });
 
+    // nec2++ works internally in wavelengths and reports segment centres and
+    // lengths that way. Everything else in this API is metres, so they are
+    // converted back rather than leaving the caller to notice.
+    const wavelengthM = LIGHT_MHZ_M / this.#freqMhz;
     const currents = drain(this.#nec.currents(), (c) => ({
       tag: c.tag,
       segment: c.segment,
-      at: [c.x, c.y, c.z],
-      lengthM: c.lengthM,
+      at: [c.x * wavelengthM, c.y * wavelengthM, c.z * wavelengthM],
+      lengthM: c.lengthM * wavelengthM,
       current: { re: c.iReal, im: c.iImag },
     }));
 
