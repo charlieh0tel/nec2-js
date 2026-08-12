@@ -1,6 +1,6 @@
 {
   "name": "necpp-wasm",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "nec2++ (NEC-2 antenna modeling) compiled to WebAssembly, driven through its C++ API rather than card decks",
   "keywords": [
     "nec2++",
