@@ -70,36 +70,17 @@ rather than to stderr, so `e.output` is usually where the explanation is;
 `e.stdout` and `e.stderr` are frequently both empty on a failed run. The error
 also carries `e.deck`, so a failure can be diagnosed without re-running it.
 
-### Known issue: `GN 2` ground below about 0.05 wavelengths
+### Limitation: `GN 2` close to ground
 
-Within roughly 0.05 wavelengths of the surface, `GN 2` results are not
-trustworthy. Above that height it meets every check made of it here, so this is
-a bad regime rather than a bad ground model -- but a ground-mounted vertical,
-the obvious reason to want finite ground, sits squarely inside it.
+**`GN 2` is not trustworthy within about 0.05 wavelengths of the surface.**
+The feedpoint resistance is roughly 92% out at 0.02 wavelengths and worse
+below, and refining the mesh does not help -- only height does. A
+ground-mounted vertical sits inside that regime.
 
-Two independent measurements, each against a closed-form answer:
-
-- **The conducting limit.** As conductivity rises a lossy half-space becomes a
-  perfect conductor, so `GN 2` must approach `GN 1`. Below 0.05 wavelengths it
-  does not: the feedpoint resistance is +91.9% out at 0.02 wavelengths, and
-  worse lower down. Refining the mesh does not help -- the error holds across a
-  27x range of segment lengths. Only height does.
-- **Energy.** Average power gain over the upper hemisphere is exactly 2 for a
-  lossless antenna over a perfect conductor. At 0.01 wavelengths, over a ground
-  conductive enough to be one, nec2c reports 42.8.
-
-This is NEC-2's behaviour rather than something nec2c introduced: aegnec2,
-which links the original Fortran SOMNEC, reproduces these numbers to three
-digits; a tip-of-tree nec2c matches the pinned 1.3.2; and the original
-Fortran NEC-2D segfaults in the same regime. nec2++ pushes the floor down about
-five-fold, to roughly 0.01 wavelengths, and then fails the same way below that.
-
-Take all of this as a bench observation from one geometry, not an expert
-assessment of the method: it says where these engines stop meeting limits they
-should meet, not why, and not that any of them is right about real soil.
-`investigations/sommerfeld.mjs` and `investigations/average-power-gain.mjs` at
-the repo root make the measurements and take another solver's command to
-compare; `TODO.md` has the figures.
+This is NEC-2's method rather than a defect in nec2c. Use
+[`necpp-wasm`](../necpp-wasm) there: nec2++ holds to roughly 0.01
+wavelengths. Above 0.05 wavelengths both meet every check made here, and
+`test/average-power-gain.test.mjs` asserts one of them.
 
 ### Performance
 
@@ -116,50 +97,31 @@ machine; `npm run test:parity` reports both for your own.
   <https://github.com/KJ7LNW/nec2c>.
 - `third_party/nec2c` is a submodule pinned to the **`v1.3.2`** tag, commit
   `265b181`. Pinning a commit rather than vendoring files is what
-  `nec2pp-wasm` does too, so both solvers are tracked the same way.
+  `necpp-wasm` does too, so both solvers are tracked the same way.
 - `build.sh` compiles the `.c` files named by `nec2c_SOURCES` and needs no
   `./configure` step: `PACKAGE_STRING` is the only generated macro the code
   reads, and it is supplied on the command line.
 
-### Why not the Debian tarball
+### The carried patch
 
-Earlier versions of this package vendored the sources from Debian's `nec2c`
-1.3.1-3 (`nec2c_1.3.1.orig.tar.bz2`, md5
-`0d86f0ae43679b9e4a3a4e3877ab62f2`) and claimed they were upstream unmodified.
-They were not quite, and the difference mattered.
+`patches/0001-line-buf-off-by-one.patch` fixes a one-byte stack overflow.
+`load_line()` fills a caller's buffer with `while (num_chr < LINE_LEN)` and
+then terminates it with `buff[num_chr]`, so a line that fills the buffer
+writes one past the end of `main()`'s `char line_buf[LINE_LEN]`. The patch
+gives the buffer one more byte; `build.sh` applies it to a staged copy so the
+submodule checkout stays pristine.
 
-That tree declares `char line_buf[81]` in `main()`, while `nec2c.h` defines
-`LINE_LEN` as 132 and `misc.c`'s `load_line()` fills a caller's buffer with
-`while (num_chr < LINE_LEN)`. **A deck line longer than 81 characters
-overflowed that stack buffer by up to 52 bytes**, confirmed under
-AddressSanitizer:
+It does not crash without a sanitizer -- `main()`'s `infile[81]` and
+`otfile[81]` sit next to `line_buf` and absorb the stray byte -- and the
+exposure is bounded, since each run gets a fresh WebAssembly instance. It is
+still an out-of-bounds write on ordinary input.
 
-```
-ERROR: AddressSanitizer: stack-buffer-overflow
-  #0 load_line  misc.c:154
-  #1 main       main.c:269
-[1920, 2001) 'line_buf' (line 41) <== Memory access at offset 2001 overflows this
-```
+Reported as [KJ7LNW/nec2c#2](https://github.com/KJ7LNW/nec2c/issues/2). Drop
+the patch once the pin moves past a release carrying the fix.
 
-It does not usually crash, which is why it went unnoticed: `main()`'s
-`infile[81]` and `otfile[81]` sit next to `line_buf`, so the stray bytes land
-in those rather than on the stack canary.
-
-Upstream widened the buffer to `LINE_LEN` in `3d8c230` before tagging
-`v1.3.1`. **That reduced the overflow but did not remove it.** `load_line()`
-terminates with `buff[num_chr]`, and `num_chr` equals `LINE_LEN` once the line
-fills the buffer, so `char[LINE_LEN]` is still one byte short -- ASan reports
-the same finding against `v1.3.2` at offset 2292 of a `[2160, 2292)` buffer.
-
-`patches/0001-line-buf-off-by-one.patch` gives the buffer one more byte, and
-`build.sh` applies it to a staged copy so the submodule checkout stays
-pristine. With it, ASan is clean and an over-long line is rejected rather than
-corrupting the stack. Reported upstream; drop the patch once the pin moves
-past a release that carries the fix.
-
-The exposure here was always bounded -- each run gets a fresh WebAssembly
-instance, so a corrupted stack cannot outlive the call or reach the host --
-but it was memory corruption on ordinary input.
+Debian's `nec2c` 1.3.1-3 carries a worse form of the same bug -- `line_buf` is
+declared `[81]` there, so the overflow is up to 52 bytes -- which is one reason
+this package builds from upstream git rather than the Debian tarball.
 
 ## Build
 
