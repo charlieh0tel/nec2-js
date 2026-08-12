@@ -154,7 +154,8 @@ defined after it, so replicating part of a model means defining that part last.
 
 `parseOutput` reads the `ANTENNA INPUT PARAMETERS`, `CURRENTS AND LOCATION`,
 `RADIATION PATTERNS` and `POWER BUDGET` sections into `sources`, `currents`,
-`pattern` and `power`.
+`pattern` and `power`, plus the average power gain trailer into
+`averagePowerGain`.
 
 ### Power and efficiency
 
@@ -168,8 +169,15 @@ network losses from the input power, and the efficiency is that quotient. The
 number therefore answers "how much of the power I put in did the wires and
 networks fail to burn", which is the radiating efficiency only when nothing
 else absorbs. **Over a lossy `GN` ground it reads high**: the power the earth
-absorbs appears in neither loss term, so it is still counted as radiated. NEC's
-average power gain (the `RP` card's `A` digit) is the honest figure there.
+absorbs appears in neither loss term, so it is still counted as radiated.
+
+`averagePowerGain` is the honest figure there. Ask for it with the `RP` card's
+`A` digit and at least two samples in each angle, and it arrives as
+`{gain, solidAngleOverPi}` -- integrated from the far field rather than
+derived from the losses, so unlike the budget it can show a violation. It has
+a closed-form value to check against too: a lossless antenna over a perfect
+conductor puts all its power into the upper hemisphere, so averaging over
+2 pi steradians gives exactly 2.
 
 Pair it with a `conductivity` load, which is what gives `structureLossW`
 anything to report:

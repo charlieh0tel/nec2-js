@@ -295,6 +295,25 @@ export interface PowerBudget {
   efficiencyPercent: number;
 }
 
+// NEC's average power gain, and the solid angle it was averaged over.
+//
+// This is the honest efficiency figure where the POWER BUDGET is not: the
+// budget reports radiated power as input minus losses, so it balances by
+// construction and can never show a violation, while this is integrated from
+// the far field over the sampled directions.
+//
+// It also has a closed-form value to check against. A lossless antenna over a
+// perfect conductor puts all its power into the upper hemisphere, so
+// averaging over 2 pi steradians gives exactly 2.
+//
+//   gain: the average power gain itself.
+//   solidAngleOverPi: the solid angle averaged over, in units of pi
+//     steradians, as nec2c prints it. The upper hemisphere is 2.
+export interface AveragePowerGain {
+  gain: number;
+  solidAngleOverPi: number;
+}
+
 export interface NecResult {
   sources: SourceResult[];
   pattern: PatternPoint[];
@@ -302,6 +321,9 @@ export interface NecResult {
   // Absent when nec2c printed no budget, which it does only for a voltage
   // source (the EX types this package writes).
   power?: PowerBudget;
+  // Absent unless the RP card's A digit asked for averaging, and nec2c also
+  // refuses it with fewer than two samples in either angle.
+  averagePowerGain?: AveragePowerGain;
 }
 
 // Current on the (1-segment) feed wire with this tag, 0 if absent.
@@ -843,6 +865,32 @@ function powerField(
   );
 }
 
+// Average power gain is a trailer on the radiation pattern rather than a
+// section of its own, printed as one line (radiation.c):
+//
+//   AVERAGE POWER GAIN:  1.9951E+00 - SOLID ANGLE USED IN AVERAGING: (+2.0000)*PI STERADIANS
+//
+// It appears only when the RP card's A digit asked for it, so its absence is
+// ordinary and not an error.
+const AVERAGE_POWER_GAIN =
+  /AVERAGE POWER GAIN:\s*(\S+)\s*-\s*SOLID ANGLE USED IN AVERAGING:\s*\(([^)]+)\)/;
+
+function parseAveragePowerGain(lines: string[]): AveragePowerGain | undefined {
+  for (const line of lines) {
+    if (line === undefined) {
+      continue;
+    }
+    const found = AVERAGE_POWER_GAIN.exec(line);
+    if (found) {
+      return {
+        gain: finite(found[1], "average power gain"),
+        solidAngleOverPi: finite(found[2], "averaging solid angle"),
+      };
+    }
+  }
+  return undefined;
+}
+
 function parsePowerBudget(lines: string[], start: number): PowerBudget {
   return {
     inputW: powerField(lines, start, "INPUT POWER", "input power"),
@@ -936,6 +984,10 @@ export function parseOutput(text: string): NecResult {
   };
   if (powerStart !== undefined) {
     result.power = parsePowerBudget(lines, powerStart);
+  }
+  const averaged = parseAveragePowerGain(lines);
+  if (averaged !== undefined) {
+    result.averagePowerGain = averaged;
   }
   return result;
 }

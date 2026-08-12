@@ -175,6 +175,25 @@ describe("parseOutput", () => {
     );
   });
 
+  it("reads average power gain and the solid angle it used", () => {
+    // A trailer on the pattern rather than a section, and the one figure that
+    // stays honest over lossy ground: the power budget reports radiated power
+    // as input minus losses, so it balances by construction.
+    const averaged = `${SAMPLE_OUTPUT}
+  AVERAGE POWER GAIN:  1.9951E+00 - SOLID ANGLE USED IN AVERAGING: (+2.0000)*PI STERADIANS
+`;
+    const { averagePowerGain } = parseOutput(averaged);
+    assert.ok(averagePowerGain, "expected an average power gain");
+    assert.ok(Math.abs(averagePowerGain.gain - 1.9951) < 1e-9);
+    assert.ok(Math.abs(averagePowerGain.solidAngleOverPi - 2) < 1e-9);
+  });
+
+  it("leaves average power gain undefined when averaging was not asked for", () => {
+    // nec2c prints the line only for the RP card's A digit, and refuses it
+    // with fewer than two samples in either angle, so absence is ordinary.
+    assert.equal(parseOutput(SAMPLE_OUTPUT).averagePowerGain, undefined);
+  });
+
   it("returns zero from feedCurrent for an unknown tag", () => {
     const result = parseOutput(fixture("loop.out.txt"));
     assert.deepEqual(feedCurrent(result, 999999), { re: 0, im: 0 });

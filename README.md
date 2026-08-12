@@ -1,16 +1,20 @@
 # nec2-js
 
-NEC-2 antenna modeling for JavaScript, in two independent pieces:
+NEC-2 antenna modeling for JavaScript, in three independent packages:
 
 | package | what it is | needs |
 |---|---|---|
-| [`nec2c-wasm`](packages/nec2c-wasm) | nec2c 1.3.1 compiled to WebAssembly. Runs in Node and browsers. | nothing |
-| [`nec2c-deck`](packages/nec2c-deck) | Builds NEC-2 input decks, parses nec2c output. No solver. | nothing |
+| [`nec2c-wasm`](packages/nec2c-wasm) | nec2c 1.3.2 compiled to WebAssembly. Deck text in, output text out. | nothing |
+| [`nec2c-deck`](packages/nec2c-deck) | Builds NEC-2 decks, parses nec2c output. No solver. | nothing |
+| [`necpp-wasm`](packages/necpp-wasm) | nec2++ compiled to WebAssembly, driven through its C++ API. No text. | nothing |
 
-They are deliberately separable. `nec2c-deck` has no dependency on the solver --
-it defines a `NecRunner` function type and lets you supply one -- so you can
-drive a native `nec2c` binary from Node without pulling in a 259 KB `.wasm`, or
-use the WebAssembly build without the deck helpers.
+Two solvers, reached differently. `nec2c-wasm` runs decks and hands back the
+report, so `nec2c-deck` writes the one and parses the other. `necpp-wasm`
+needs neither: nec2++ has an API, so a model goes in and numbers come out.
+
+`nec2c-deck` has no dependency on a solver -- it defines a `NecRunner`
+function type and lets you supply one -- so you can drive a native `nec2c`
+binary from Node without pulling in a 259 KB `.wasm`.
 
 ```js
 import { buildDeck, parseOutput } from "nec2c-deck";
