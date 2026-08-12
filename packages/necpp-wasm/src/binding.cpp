@@ -241,19 +241,28 @@ class Nec {
     return m_context.get_impedance_imag(0, feedIndex);
   }
 
+  // A braced initializer cannot go inside NEC_GUARD: the preprocessor splits
+  // it on the commas. Assigning the fields keeps the guard on the calls, which
+  // is where nec2++ throws if no pattern has been solved.
   GainStats gain() {
-    return {m_context.get_gain_max(0), m_context.get_gain_min(0),
-            m_context.get_gain_mean(0), m_context.get_gain_sd(0)};
+    NEC_GUARD(GainStats g; g.maxDb = m_context.get_gain_max(0);
+              g.minDb = m_context.get_gain_min(0);
+              g.meanDb = m_context.get_gain_mean(0);
+              g.sdDb = m_context.get_gain_sd(0); return g;)
   }
 
   GainStats gainRhcp() {
-    return {m_context.get_gain_rhcp_max(0), m_context.get_gain_rhcp_min(0),
-            m_context.get_gain_rhcp_mean(0), m_context.get_gain_rhcp_sd(0)};
+    NEC_GUARD(GainStats g; g.maxDb = m_context.get_gain_rhcp_max(0);
+              g.minDb = m_context.get_gain_rhcp_min(0);
+              g.meanDb = m_context.get_gain_rhcp_mean(0);
+              g.sdDb = m_context.get_gain_rhcp_sd(0); return g;)
   }
 
   GainStats gainLhcp() {
-    return {m_context.get_gain_lhcp_max(0), m_context.get_gain_lhcp_min(0),
-            m_context.get_gain_lhcp_mean(0), m_context.get_gain_lhcp_sd(0)};
+    NEC_GUARD(GainStats g; g.maxDb = m_context.get_gain_lhcp_max(0);
+              g.minDb = m_context.get_gain_lhcp_min(0);
+              g.meanDb = m_context.get_gain_lhcp_mean(0);
+              g.sdDb = m_context.get_gain_lhcp_sd(0); return g;)
   }
 
   // What each driven segment saw: impedance, the current that flowed, the
@@ -264,6 +273,7 @@ class Nec {
   // model has an NT or TL network; antenna_input is the ordinary path and is
   // the one that always carries the feed data.
   std::vector<Feed> feeds() {
+    NEC_GUARD(
     nec_antenna_input* input = m_context.get_input_parameters(0);
     if (input == nullptr) {
       return {};
@@ -290,7 +300,7 @@ class Nec {
       f.powerW = i < power.size() ? power[i] : 0.0;
       out.push_back(f);
     }
-    return out;
+    return out;)
   }
 
   // The honest efficiency figure over lossy ground, where a power budget
@@ -298,14 +308,16 @@ class Nec {
   // Only meaningful when the A digit asked for it and the grid has at least
   // two points in each angle.
   double averagePowerGain() {
+    NEC_GUARD(
     nec_radiation_pattern* rp = m_context.get_radiation_pattern(0);
     if (rp == nullptr) {
       throw std::runtime_error("no radiation pattern: run radiationPattern()");
     }
-    return rp->get_average_power_gain();
+    return rp->get_average_power_gain();)
   }
 
   std::vector<PatternPoint> pattern() {
+    NEC_GUARD(
     nec_radiation_pattern* rp = m_context.get_radiation_pattern(0);
     if (rp == nullptr) {
       throw std::runtime_error("no radiation pattern: run radiationPattern()");
@@ -328,10 +340,11 @@ class Nec {
         points.push_back(p);
       }
     }
-    return points;
+    return points;)
   }
 
   std::vector<SegmentCurrent> currents() {
+    NEC_GUARD(
     nec_structure_currents* sc = m_context.get_structure_currents(0);
     if (sc == nullptr) {
       return {};
@@ -358,7 +371,7 @@ class Nec {
       c.iImag = imag(current[i]);
       out.push_back(c);
     }
-    return out;
+    return out;)
   }
 
  private:

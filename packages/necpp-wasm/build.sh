@@ -107,6 +107,10 @@ common_flags=(
   -I"$gendir"
   -isystem "$vendor/src/eigen"
   --bind
+  # embind turns any C++ throw into a JS CppException carrying only a heap
+  # pointer. getExceptionMessage turns that pointer back into the message the
+  # binding raised, which src/runner.mjs uses to hand callers a real Error.
+  -sEXPORTED_RUNTIME_METHODS=getExceptionMessage
   -sMODULARIZE=1
   -sEXPORT_ES6=1
   -sEXPORT_NAME=createNecpp

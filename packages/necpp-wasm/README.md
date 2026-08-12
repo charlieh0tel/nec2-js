@@ -32,9 +32,14 @@ result.gain.maxDb;              // and minDb, meanDb, sdDb
 result.averagePowerGain;        // 0.97
 ```
 
-Complex values are `{re, im}`, points are `[x, y, z]` in metres, angles are
-degrees, and anything selecting a mode is a string rather than an integer
-code.
+The API follows nec2++'s own shape and units, adding JavaScript idiom rather
+than a different model: complex values are `{re, im}`, points are
+`[x, y, z]`, and a mode is a string rather than an integer code.
+
+**Units are nec2++'s, and they are not uniform.** Geometry is declared in
+metres, but results come back in wavelengths, because that is what nec2++
+solves in. Every value carrying a unit says which one in its name --
+`radiusM` going in, `atWavelengths` and `lengthWavelengths` coming back.
 
 ### Building a structure step by step
 
@@ -83,7 +88,7 @@ general two-port `network` (NT).
   angle.
 - **Per-direction polarization** -- `axialRatio`, `tiltDeg` and `sense` on
   every pattern point, not only at the peak.
-- **Per-segment currents** with tag, segment, centre coordinates and length.
+- **Per-segment currents** with tag, segment, and the centre and length in wavelengths.
 - **Feed current, voltage and power**, not just impedance. These come from
   nec2++'s antenna-input result rather than its C API, which has only the
   impedance.
