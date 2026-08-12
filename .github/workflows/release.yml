@@ -1,0 +1,189 @@
+name: Release
+
+# Publishes one workspace package to npm when a tag naming it is pushed.
+#
+# The tag is the release: `nec2c-deck@0.2.1` publishes that package at that
+# version. Merging never publishes, so an accidental merge cannot ship, and
+# the deliberate act is pushing a tag.
+#
+# Everything the release claims is checked here rather than trusted:
+#   - the tag's version matches the package's manifest
+#   - that version is not already on the registry
+#   - lint, build and the whole test suite pass
+#   - for a package with prebuilt WebAssembly, the committed artifacts rebuild
+#     byte-for-byte from the pinned submodule and toolchain
+#
+# The last one matters most. These packages ship binaries, so a consumer
+# otherwise has to take on faith that the .wasm came from the sources beside
+# it. Publishing with --provenance records the workflow run and commit that
+# produced the tarball, which makes that checkable.
+
+on:
+  push:
+    tags:
+      # <package>@<semver>, matching the tags already in this repo.
+      - "*@*.*.*"
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Workspace package to publish"
+        required: true
+      version:
+        description: "Version it must already be set to"
+        required: true
+
+permissions:
+  contents: read
+  # Required for npm provenance.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Inputs go through the environment rather than being interpolated into
+      # the script, and both fields are checked against a strict shape before
+      # anything uses them: the package name reaches a filesystem path and an
+      # npm command, so a workflow_dispatch caller must not be able to put
+      # shell metacharacters in it.
+      - name: Work out what is being released
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_PACKAGE: ${{ inputs.package }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            package="$INPUT_PACKAGE"
+            version="$INPUT_VERSION"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+            package="${tag%@*}"
+            version="${tag##*@}"
+          fi
+          case "$package" in
+            *[!a-zA-Z0-9._-]* | "" | .* )
+              echo "refusing package name: $package" >&2
+              exit 1 ;;
+          esac
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]* ) ;;
+            * ) echo "refusing version: $version" >&2; exit 1 ;;
+          esac
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $package $version"
+
+      - name: Check the package exists and its manifest agrees
+        env:
+          PACKAGE: ${{ steps.target.outputs.package }}
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          manifest="packages/$PACKAGE/package.json"
+          if [ ! -f "$manifest" ]; then
+            echo "no such workspace package: $PACKAGE" >&2
+            exit 1
+          fi
+          declared="$(node -p "require('./$manifest').version")"
+          if [ "$declared" != "$VERSION" ]; then
+            echo "tag says $VERSION, $manifest says $declared" >&2
+            echo "the tag and the manifest have to agree" >&2
+            exit 1
+          fi
+          echo "$PACKAGE $VERSION"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Refuse to republish
+        env:
+          PACKAGE: ${{ steps.target.outputs.package }}
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          # npm would reject this anyway, but failing here says why.
+          if npm view "$PACKAGE@$VERSION" version >/dev/null 2>&1; then
+            echo "$PACKAGE@$VERSION is already published" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build --workspaces --if-present
+
+      - name: Tests
+        run: npm test
+
+      # A package that builds WebAssembly has to prove the committed artifacts
+      # are the ones its sources produce, or --provenance would attest to a
+      # tarball nobody can reproduce.
+      - name: Does this package build wasm?
+        id: wasm
+        env:
+          PACKAGE: ${{ steps.target.outputs.package }}
+        run: |
+          if [ -f "packages/$PACKAGE/build.sh" ]; then
+            echo "build=yes" >> "$GITHUB_OUTPUT"
+            version="$(grep -oP '^EMCC_VERSION=\K.*' "packages/$PACKAGE/build.sh")"
+            echo "emcc=$version" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cache the toolchain
+        if: steps.wasm.outputs.build == 'yes'
+        uses: actions/cache@v4
+        with:
+          path: |
+            emsdk/upstream
+            emsdk/node
+            emsdk/downloads
+            emsdk/.emscripten
+          key: emsdk-${{ runner.os }}-${{ steps.wasm.outputs.emcc }}
+
+      - name: Rebuild the artifacts and fail if a byte moved
+        if: steps.wasm.outputs.build == 'yes'
+        env:
+          PACKAGE: ${{ steps.target.outputs.package }}
+        run: |
+          bash "packages/$PACKAGE/build.sh"
+          if ! git diff --quiet -- "packages/$PACKAGE/prebuilts"; then
+            echo "the committed artifacts are not what the sources build:" >&2
+            git diff --stat -- "packages/$PACKAGE/prebuilts" >&2
+            exit 1
+          fi
+          echo "artifacts reproduce byte-for-byte"
+
+      - name: Publish
+        env:
+          PACKAGE: ${{ steps.target.outputs.package }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --workspace "$PACKAGE" --provenance --access public
+
+      - name: Confirm the registry has it
+        env:
+          PACKAGE: ${{ steps.target.outputs.package }}
+          VERSION: ${{ steps.target.outputs.version }}
+        run: |
+          # The registry is eventually consistent; a fresh publish can take a
+          # moment to be readable.
+          for attempt in 1 2 3 4 5; do
+            if [ "$(npm view "$PACKAGE@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
+              echo "$PACKAGE@$VERSION is live"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "published, but $PACKAGE@$VERSION is not readable yet" >&2
+          exit 1
