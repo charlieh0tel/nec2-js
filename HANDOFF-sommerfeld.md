@@ -64,8 +64,9 @@ not quite 0.02 wl. At 145.9 MHz, lambda is 2.054780384 m, so 0.02 wl is
     -GW 1 11 -0.500000 0.000000 0.041091 0.500000 0.000000 0.041091 0.001000
     +GW 1 11 -0.500000 0.000000 0.041096 0.500000 0.000000 0.041096 0.001000
 
-Physically irrelevant at 0.011 percent, and the recorded results are
-unaffected at their quoted precision. It matters only because
+Physically irrelevant at 0.011 percent, though it does reach the last
+digit of the recorded results; see the check below. It matters mainly
+because
 `investigations/sommerfeld.mjs` computes the height the same way this
 correction does, so the committed deck and the harness's generated deck
 currently disagree, and anyone reproducing a row by hand will hit it.
@@ -129,11 +130,48 @@ is blocked, permanently, on `nec2c-wasm`: the page models a feedline
 30 percent off there forever because that is what NEC-2 does. No
 upstream fix will change it.
 
-A **nec2++ wasm build is the only thing that unblocks it**, and this
-repo has `necpp-wasm` and `nec2pp-wasm` branches. If `necpp-wasm` is
-close to usable, that is worth knowing on the ham_radio side, where the
-fallback options are to move the offline fit to nec2c so both ends are
-wrong together, or to ship the button reporting a known spread.
+A **nec2++ wasm build is the only thing that unblocks it**, and
+`packages/necpp-wasm` is well past a sketch: prebuilt `necpp.wasm` and
+an inline variant, a runner, C++ bindings, and a test suite exercising
+every binding. So the ham_radio fallbacks -- move the offline fit to
+nec2c so both ends are wrong together, or ship the button reporting a
+known spread -- may not be needed.
+
+The measurement that would settle it has not been made: run
+`sommerfeld.mjs` against the necpp-wasm runner and confirm it reproduces
+the nec2++ column rather than the nec2c one. That is a small job and it
+converts "should be equivalent" into a number. Left undone because this
+item is on hold, not because it is hard.
+
+## Does `investigations/` still earn its place?
+
+Yes, and the overlap runs the other way: `sommerfeld_cross.py` in
+ham_radio duplicates part of what is here, not the reverse.
+
+- `average-power-gain.mjs` is not duplicated anywhere. It measures a
+  different quantity through a different code path -- far-field
+  integration rather than the current solution -- against a closed-form
+  answer that needs no second solver. That last property makes it the
+  harder check to argue with: it cannot be dismissed as one
+  implementation disagreeing with another. Nothing on the ham_radio side
+  does this.
+- `sommerfeld.mjs` is the only thing that runs the **wasm** build, and
+  the only thing that exercises this repo's own `buildDeck` and
+  `parseOutput`. `sommerfeld_cross.py` hand-writes cards and bypasses
+  both, so it tests engines while this tests the package.
+- `sommerfeld_near_ground.nec` is the pinned deck and the record of
+  results. The Python side generates decks and discards them.
+
+They belong here because the question is this repo's: can the solver
+this package ships be trusted near ground, and should it carry nec2++
+instead. That decision is made here.
+
+What has changed is their role. They were investigations into an open
+question, and the question is now answered, so they are acceptance
+criteria: the definition of what a correct solver must do in this
+regime. If `necpp-wasm` lands, `sommerfeld.mjs` is the test that proves
+it -- passing where `nec2c-wasm` fails. Worth reframing the file headers
+to say that, and perhaps the directory name with them.
 
 ## Where the instruments are
 
@@ -171,9 +209,13 @@ is not reproducible from source by a third party.
 
 ## Repo state when this was written
 
-On `test-coverage`, 3 commits ahead of `origin/main`, with an
-uncommitted change to `packages/necpp-wasm/src/runner.mjs`. That change
-is yours and was deliberately left alone.
+On `test-coverage`, 4 commits ahead of `origin/main`, clean. The most
+recent three are necpp-wasm work -- bindings exercised and fixed,
+results reported in nec2++'s own units -- and this file is tracked among
+them. Nothing else here was touched from the ham_radio side.
+
+Reported by the author: **nec2pp-wasm is now in good shape.** That is
+the piece task 4 turns on.
 
 ## One loose end
 

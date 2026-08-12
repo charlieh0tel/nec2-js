@@ -119,13 +119,13 @@ function asError(module, thrown) {
     // createContext() builds a fresh instance.
     if (thrown instanceof WebAssembly.RuntimeError) {
       modulePromise = undefined;
-      return new Error(
-        `nec2++ trapped (${thrown.message}). This usually means a tag or ` +
-          "segment that does not exist was referenced; nec2++ does not " +
-          "range-check those. The module has been discarded and the next " +
-          "context will get a fresh one.",
-        { cause: thrown },
-      );
+      const cause =
+        "This usually means a tag or segment that does not exist was " +
+        "referenced; nec2++ does not range-check those. The module has been " +
+        "discarded and the next context will get a fresh one.";
+      return new Error(`nec2++ trapped (${thrown.message}). ${cause}`, {
+        cause: thrown,
+      });
     }
     return thrown;
   }
