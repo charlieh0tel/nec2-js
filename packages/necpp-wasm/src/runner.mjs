@@ -8,22 +8,18 @@
 // model is built up conditionally or solved more than once. solve() is the
 // one-shot convenience over it.
 //
-// Conventions throughout, which nec2++'s C++ API does not share: complex
-// values are {re, im}, points are [x, y, z] in metres, angles are degrees,
-// and anything selecting a mode is a string rather than an integer code.
+// The shape follows nec2++'s own: the same calls in the same order, the same
+// units, and results as it reports them. What this adds is JavaScript idiom
+// rather than a different model -- complex values are {re, im}, points are
+// [x, y, z], and a mode is a string rather than an integer code.
+//
+// Units follow nec2++ too, and they are not uniform: geometry is declared in
+// metres, but results come back in wavelengths, because that is what it
+// solves in. Anything carrying a unit says which one in its name.
 
 import createNecpp from "../prebuilts/necpp.mjs";
 
 export { createContext, createSolver, solve, POLARIZATION_SENSE };
-
-// Speed of light as MHz*m, for turning a frequency into a wavelength.
-//
-// nec2++ derives its own c from 1/sqrt(mu0*eps0) with its rounded constants
-// rather than using the defined value, so converting its wavelength-based
-// geometry back to metres with this is accurate to about one part in 1e5.
-// That is far below any modelling accuracy, but it means a coordinate does
-// not round-trip to the exact metre value it was given.
-const LIGHT_MHZ_M = 299.792458;
 
 // nec2++'s polarization_sense enum, in its own order. The fourth is what it
 // reports where both field components are ~0 and no sense means anything --
@@ -189,9 +185,6 @@ async function createSolver(options = {}) {
 // actually runs the solve. Reading a result before that throws.
 class NecContext {
   #nec;
-  // The frequency last given to frequency(), needed to convert nec2++'s
-  // wavelength-based geometry back to metres.
-  #freqMhz = 0;
 
   constructor(nec) {
     this.#nec = nec;
@@ -376,9 +369,6 @@ class NecContext {
   frequency(freqMhz) {
     this.#assertOpen();
     this.#nec.frequency(freqMhz);
-    // Kept because nec2++ reports segment geometry in wavelengths; converting
-    // those back to metres needs the frequency they were solved at.
-    this.#freqMhz = freqMhz;
     return this;
   }
 
@@ -648,15 +638,15 @@ class NecContext {
       };
     });
 
-    // nec2++ works internally in wavelengths and reports segment centres and
-    // lengths that way. Everything else in this API is metres, so they are
-    // converted back rather than leaving the caller to notice.
-    const wavelengthM = LIGHT_MHZ_M / this.#freqMhz;
+    // Reported as nec2++ reports them: it solves in wavelengths, so segment
+    // centres and lengths come back that way rather than in the metres the
+    // geometry was declared in. The names say so, because the mismatch is
+    // otherwise invisible and produces plausible-looking wrong numbers.
     const currents = drain(this.#nec.currents(), (c) => ({
       tag: c.tag,
       segment: c.segment,
-      at: [c.x * wavelengthM, c.y * wavelengthM, c.z * wavelengthM],
-      lengthM: c.lengthM * wavelengthM,
+      atWavelengths: [c.x, c.y, c.z],
+      lengthWavelengths: c.lengthM,
       current: { re: c.iReal, im: c.iImag },
     }));
 

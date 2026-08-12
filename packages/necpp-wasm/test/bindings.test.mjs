@@ -137,12 +137,16 @@ describe("geometry bindings", () => {
     const first = result.currents.find((c) => c.tag === 1);
     const copy = result.currents.find((c) => c.tag === 2);
     // The original sits on +x; a 90 degree rotation about z puts the copy on
-    // +y, so their centres swap which axis is nonzero.
-    // The round trip through nec2++'s wavelengths is good to ~1e-5 relative.
+    // +y, so their centres swap which axis is nonzero. Positions are in
+    // wavelengths, as nec2++ reports them.
+    const expected = 0.5 / WAVELENGTH_M;
+    const near = (value, want) => Math.abs(value - want) < 1e-4;
     assert.ok(
-      Math.abs(first.at[0] - 0.5) < 1e-4 && Math.abs(first.at[1]) < 1e-4,
+      near(first.atWavelengths[0], expected) && near(first.atWavelengths[1], 0),
     );
-    assert.ok(Math.abs(copy.at[1] - 0.5) < 1e-4 && Math.abs(copy.at[0]) < 1e-4);
+    assert.ok(
+      near(copy.atWavelengths[1], expected) && near(copy.atWavelengths[0], 0),
+    );
   });
 });
 
