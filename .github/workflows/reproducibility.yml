@@ -30,6 +30,8 @@ on:
       - "packages/*/src/binding.cpp"
       - "packages/*/third_party/**"
       - "packages/*/prebuilts/**"
+      # A change to this workflow has to re-prove what it asserts.
+      - ".github/workflows/reproducibility.yml"
   workflow_dispatch:
 
 jobs:
