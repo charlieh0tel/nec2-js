@@ -1,10 +1,14 @@
 name: Reproducibility
 
-# Rebuilds the committed WebAssembly artifacts from the vendored C source with
-# the pinned toolchain and fails if a single byte moved. This is the check
-# behind the claim in packages/nec2c-wasm/README.md, and the reason the emcc
+# Rebuilds the committed WebAssembly artifacts from source with the pinned
+# toolchain and fails if a single byte moved. This is the check behind the
+# reproducibility claim in each package's README, and the reason the emcc
 # version is pinned at all: other versions produce working but different
 # output, so without this the prebuilts could drift from their source.
+#
+# Both solvers are covered. A package that ships a binary and has no standing
+# check is one where a stale artifact can sit on main unnoticed between
+# releases -- the release workflow rebuilds too, but only at publish time.
 #
 # Kept off the main CI because installing the toolchain downloads ~325 MB.
 # Cached by emcc version, so it is cheap after the first run.
@@ -15,20 +19,30 @@ on:
   push:
     branches: [main]
     paths:
-      - "packages/nec2c-wasm/build.sh"
-      - "packages/nec2c-wasm/third_party/**"
-      - "packages/nec2c-wasm/prebuilts/**"
+      - "packages/*/build.sh"
+      - "packages/*/src/binding.cpp"
+      - "packages/*/third_party/**"
+      - "packages/*/prebuilts/**"
       - ".github/workflows/reproducibility.yml"
   pull_request:
     paths:
-      - "packages/nec2c-wasm/build.sh"
-      - "packages/nec2c-wasm/third_party/**"
-      - "packages/nec2c-wasm/prebuilts/**"
+      - "packages/*/build.sh"
+      - "packages/*/src/binding.cpp"
+      - "packages/*/third_party/**"
+      - "packages/*/prebuilts/**"
+      # A change to this workflow has to re-prove what it asserts.
+      - ".github/workflows/reproducibility.yml"
   workflow_dispatch:
 
 jobs:
   rebuild:
     runs-on: ubuntu-latest
+    strategy:
+      # Independent artifacts: a drift in one says nothing about the other, so
+      # let both report rather than stopping at the first.
+      fail-fast: false
+      matrix:
+        package: [nec2c-wasm, necpp-wasm]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,8 +50,10 @@ jobs:
 
       - name: Read the pinned emcc version
         id: pin
+        env:
+          PACKAGE: ${{ matrix.package }}
         run: |
-          version="$(grep -oP '^EMCC_VERSION=\K.*' packages/nec2c-wasm/build.sh)"
+          version="$(grep -oP '^EMCC_VERSION=\K.*' "packages/$PACKAGE/build.sh")"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Cache the toolchain
@@ -51,15 +67,18 @@ jobs:
           key: emsdk-${{ runner.os }}-${{ steps.pin.outputs.version }}
 
       - name: Rebuild the artifacts
-        run: bash packages/nec2c-wasm/build.sh
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: bash "packages/$PACKAGE/build.sh"
 
       - name: Fail if the committed artifacts moved
+        env:
+          PACKAGE: ${{ matrix.package }}
+          EMCC_VERSION: ${{ steps.pin.outputs.version }}
         run: |
-          if ! git diff --quiet -- packages/nec2c-wasm/prebuilts; then
+          if ! git diff --quiet -- "packages/$PACKAGE/prebuilts"; then
             echo "Rebuilt artifacts differ from the committed ones:" >&2
-            git diff --stat -- packages/nec2c-wasm/prebuilts >&2
+            git diff --stat -- "packages/$PACKAGE/prebuilts" >&2
             exit 1
           fi
-          echo "Artifacts reproduce byte-for-byte with emcc $EMCC_VERSION."
-        env:
-          EMCC_VERSION: ${{ steps.pin.outputs.version }}
+          echo "$PACKAGE reproduces byte-for-byte with emcc $EMCC_VERSION."
