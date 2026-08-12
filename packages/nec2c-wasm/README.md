@@ -70,27 +70,17 @@ rather than to stderr, so `e.output` is usually where the explanation is;
 `e.stdout` and `e.stderr` are frequently both empty on a failed run. The error
 also carries `e.deck`, so a failure can be diagnosed without re-running it.
 
-### Limitation: `GN 2` ground below about 0.05 wavelengths
+### Limitation: `GN 2` close to ground
 
-**Do not trust `GN 2` within roughly 0.05 wavelengths of the surface.** A
-ground-mounted vertical -- the obvious reason to want finite ground -- sits
-inside that regime.
+**`GN 2` is not trustworthy within about 0.05 wavelengths of the surface.**
+The feedpoint resistance is roughly 92% out at 0.02 wavelengths and worse
+below, and refining the mesh does not help -- only height does. A
+ground-mounted vertical sits inside that regime.
 
-Two closed-form checks fail there. As conductivity rises a lossy half-space
-becomes a perfect conductor, so `GN 2` must approach `GN 1`; at 0.02
-wavelengths the feedpoint resistance is 92% out, and worse lower down.
-Average power gain over a perfect conductor is exactly 2; at 0.01 wavelengths
-nec2c reports 42.8. Refining the mesh does not help -- the error holds across
-a 27x range of segment lengths. Only height does.
-
-This is NEC-2's method, not a defect in nec2c: implementations linking the
-original Fortran SOMNEC reproduce it. nec2++ (see
-[`necpp-wasm`](../necpp-wasm)) holds to roughly 0.01 wavelengths, five times
-lower, and fails the same way below that. NEC-4 does better still.
-
-Above 0.05 wavelengths both engines meet every check made here.
-`test/average-power-gain.test.mjs` asserts the energy limit at heights where
-the method is sound.
+This is NEC-2's method rather than a defect in nec2c. Use
+[`necpp-wasm`](../necpp-wasm) there: nec2++ holds to roughly 0.01
+wavelengths. Above 0.05 wavelengths both meet every check made here, and
+`test/average-power-gain.test.mjs` asserts one of them.
 
 ### Performance
 

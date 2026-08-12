@@ -16,13 +16,6 @@ needs neither: nec2++ has an API, so a model goes in and numbers come out.
 function type and lets you supply one -- so you can drive a native `nec2c`
 binary from Node without pulling in a 259 KB `.wasm`.
 
-**Which solver?** `necpp-wasm` if you are modelling anything within about
-0.05 wavelengths of ground, where NEC-2's Sommerfeld evaluation stops meeting
-closed-form limits; see
-[`nec2c-wasm`'s README](packages/nec2c-wasm#limitation-gn-2-ground-below-about-005-wavelengths).
-`nec2c-wasm` if you want decks, the smaller artifact, or the reference
-implementation.
-
 ```js
 import { buildDeck, parseOutput } from "nec2c-deck";
 import { runNec } from "nec2c-wasm";
