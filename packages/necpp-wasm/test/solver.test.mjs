@@ -105,6 +105,27 @@ describe("necpp-wasm", () => {
     assert.equal(result.averagePowerGain, undefined);
   });
 
+  it("solves a structure of several hundred segments", async () => {
+    // Regression: Eigen's blocked LU keeps its GEMM buffers on the stack, and
+    // past about 140 segments they overran Emscripten's default 64 KiB stack.
+    // build.sh sets -sSTACK_SIZE for this; see the comment there.
+    const solve = await createSolver();
+    const segments = 301;
+    const result = solve(
+      model({
+        wires: [{ ...WIRE, segments }],
+        sources: [{ ...SOURCE, segment: 151 }],
+      }),
+    );
+    assert.equal(result.currents.length, segments);
+    // Same dipole as the 9-segment case; finer segmentation moves the
+    // feedpoint only slightly.
+    assert.ok(
+      Math.abs(result.feeds[0].impedance.re - 75.2571) < 5,
+      `expected ~75 ohm, got ${result.feeds[0].impedance.re}`,
+    );
+  });
+
   it("returns per-segment currents", async () => {
     const solve = await createSolver();
     const result = solve(model());
