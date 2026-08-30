@@ -41,8 +41,3 @@ GPLv3; the WebAssembly artifacts built from it carry those obligations, so the
 corresponding C source is vendored in `packages/nec2c-wasm/third_party/nec2c/`
 and ships in the published tarball. See each package's README for details.
 
-## Origin
-
-Both packages were extracted from
-[charlieh0tel/tamago](https://github.com/charlieh0tel/tamago), an eggbeater
-antenna designer, where they had grown general enough to stand on their own.
