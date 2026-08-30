@@ -122,6 +122,14 @@ common_flags=(
   -sEXPORT_ES6=1
   -sEXPORT_NAME=createNecpp
   -sALLOW_MEMORY_GROWTH=1
+  # Eigen puts GEMM blocking buffers on the stack with alloca, up to
+  # EIGEN_STACK_ALLOCATION_LIMIT (128 KiB) apiece, and the blocked LU that
+  # nec2++ factors with uses two of them. Emscripten's default stack is 64 KiB,
+  # so past about 140 segments the LU overran it and, since nothing checks the
+  # stack in a release build, corrupted the data segment beneath it; the trap
+  # then surfaced somewhere unrelated. 1 MiB is comfortably above what Eigen
+  # assumes and has been verified to 2000 segments with -sSTACK_OVERFLOW_CHECK=2.
+  -sSTACK_SIZE=1MB
   -sENVIRONMENT=web,node
 )
 

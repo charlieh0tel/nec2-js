@@ -135,6 +135,13 @@ solve escapes the module as an uncaught error. Setting the flag only at link
 cannot restore a `catch` already dropped from the objects. The symptom is
 confusing -- every setup call succeeds and only the solve appears to fail.
 
+**The stack is set to 1 MiB.** Eigen, which nec2++ factors its matrix with,
+puts GEMM blocking buffers on the stack with `alloca`, up to its
+`EIGEN_STACK_ALLOCATION_LIMIT` of 128 KiB apiece. Emscripten's default stack
+is 64 KiB, and with it any model past about 140 segments overran the stack and
+trapped somewhere unrelated. With `-sSTACK_SIZE=1MB` it has been checked to
+2000 segments.
+
 ## Vendoring
 
 nec2++ is a `third_party/necpp` submodule pinned to an exact commit, not a
