@@ -34,7 +34,8 @@ on:
 
 permissions:
   contents: read
-  # Required for npm provenance.
+  # Required for npm provenance, and for trusted publishing: both are proved
+  # by the same OIDC claim.
   id-token: write
 
 jobs:
@@ -102,6 +103,14 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing needs npm 11.5.1 or newer, and Node 20 ships npm 10.
+      # Upgrading here rather than moving to Node 24 keeps the toolchain the
+      # wasm rebuild is checked against exactly where it was.
+      - name: Upgrade npm for trusted publishing
+        run: |
+          npm install -g npm@latest
+          npm --version
+
       - name: Refuse to republish
         env:
           PACKAGE: ${{ steps.target.outputs.package }}
@@ -165,10 +174,14 @@ jobs:
           fi
           echo "artifacts reproduce byte-for-byte"
 
+      # No NODE_AUTH_TOKEN. npm is configured to trust this repository and
+      # this workflow, and exchanges the run's OIDC claim for credentials that
+      # live for the length of the publish. The id-token: write permission
+      # above, which provenance already needed, is what makes that claim
+      # available.
       - name: Publish
         env:
           PACKAGE: ${{ steps.target.outputs.package }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --workspace "$PACKAGE" --provenance --access public
 
       - name: Confirm the registry has it
