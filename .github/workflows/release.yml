@@ -104,11 +104,17 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       # Trusted publishing needs npm 11.5.1 or newer, and Node 20 ships npm 10.
-      # Upgrading here rather than moving to Node 24 keeps the toolchain the
-      # wasm rebuild is checked against exactly where it was.
+      # Upgrading here rather than moving to Node 22 or 24 keeps the toolchain
+      # the wasm rebuild is checked against exactly where it was.
+      #
+      # Pinned to the 11 series on purpose: `npm@latest` is npm 12, which
+      # requires Node 22.22 or newer and fails to install here. npm 11 wants
+      # node ^20.17.0, which this runner satisfies. Moving to npm 12 means
+      # moving Node first, and that is a decision about the reproducibility
+      # check, not about publishing.
       - name: Upgrade npm for trusted publishing
         run: |
-          npm install -g npm@latest
+          npm install -g 'npm@^11.5.1'
           npm --version
 
       - name: Refuse to republish
