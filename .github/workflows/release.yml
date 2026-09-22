@@ -195,14 +195,21 @@ jobs:
           PACKAGE: ${{ steps.target.outputs.package }}
           VERSION: ${{ steps.target.outputs.version }}
         run: |
-          # The registry is eventually consistent; a fresh publish can take a
-          # moment to be readable.
-          for attempt in 1 2 3 4 5; do
+          # The registry is eventually consistent, and "a moment" is not the
+          # right unit: nec2c-wasm@0.1.4 published at 21:28:46 and was not
+          # readable until 21:33:57, five minutes later. The old window was 50
+          # seconds, so it failed a release that had in fact succeeded, which
+          # is worse than not checking at all -- it sends you looking for a
+          # publishing problem that does not exist.
+          for attempt in $(seq 1 40); do
             if [ "$(npm view "$PACKAGE@$VERSION" version 2>/dev/null)" = "$VERSION" ]; then
               echo "$PACKAGE@$VERSION is live"
               exit 0
             fi
-            sleep 10
+            sleep 15
           done
-          echo "published, but $PACKAGE@$VERSION is not readable yet" >&2
+          echo "$PACKAGE@$VERSION did not appear on the registry within 10" \
+               "minutes. The publish step itself succeeded, so check" \
+               "https://www.npmjs.com/package/$PACKAGE before assuming it" \
+               "failed -- this step only reports readability." >&2
           exit 1
