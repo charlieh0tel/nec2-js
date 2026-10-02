@@ -95,10 +95,13 @@ has been notified.
 
 ## Upstream contributions in flight
 
-- [ ] [tmolteno/necpp#129](https://github.com/tmolteno/necpp/pull/129) --
+- [x] [tmolteno/necpp#129](https://github.com/tmolteno/necpp/pull/129) --
       `example/test_nec.c` does not compile against the shipped header.
-- [ ] `NECPP_BUILD_WASM` does not set `-fexceptions`, so nothing that target
-      builds can finish a solve. One-line CMake fix, not yet sent.
+      Closed as superseded: the same fix landed upstream as `d0f3259`.
+- [x] `NECPP_BUILD_WASM` does not set `-fexceptions`, so nothing that target
+      builds can finish a solve. Sent as
+      [tmolteno/necpp#136](https://github.com/tmolteno/necpp/pull/136) and
+      withdrawn: the target is a stub, and `build.sh` already carries the flag.
 - [ ] `src/nec_wasm.cpp` is a stub whose `nec_process_input()` ignores its
       argument and reads `stdin`. Wiring it to a string is feature work, and
       better landed upstream than carried.
